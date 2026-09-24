@@ -11,9 +11,16 @@
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-  <!-- The app draws every screen inside this box. -->
+  <!-- #app is the phone-shaped frame. On a phone it fills the screen;
+       on a computer it becomes a narrow column in the middle. -->
   <div id="app">
-    <h1>Pickup Brandeis</h1>
+    <!-- The app draws every screen inside this box. -->
+    <main id="screen">
+      <h1>Pickup Brandeis</h1>
+    </main>
+
+    <!-- The bottom tab bar goes here (built in Task 1.4). -->
+    <div id="tab-bar"></div>
   </div>
 
   <script src="js/app.js"></script>

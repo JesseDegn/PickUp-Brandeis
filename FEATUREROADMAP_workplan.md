@@ -4,7 +4,7 @@ How to read this plan: every task is a small checkbox. Each one lists **what is 
 
 All app files live in the `public/` folder. "Run it" means: open a terminal in the project folder and type `npx wrangler dev`, then open the address it prints. (If you would rather not use Wrangler, `python3 -m http.server 8000 --directory public` and `http://localhost:8000` also works.)
 
-**Status:** Phase 0 complete. Tasks 1.1 and 1.2 complete. Next up: Task 1.3.
+**Status:** Phase 0 complete. Tasks 1.1 to 1.3 complete. Next up: Task 1.4.
 
 Legend: `[ ]` not started, `[x]` finished and tested.
 
@@ -37,7 +37,7 @@ Legend: `[ ]` not started, `[x]` finished and tested.
   - Done when: the page background is light gray, headings are navy, and text uses the Inter font.
   - Test it yourself: run it and compare the colors and font to the Figma screens.
 
-- [ ] **1.3 Build the phone-shaped app shell**
+- [x] **1.3 Build the phone-shaped app shell**
   - Builds: a centered app area that fills the screen on phones and appears as a phone-width column on desktop, with an empty place for screens and an empty place for the tab bar.
   - Files: modify `public/index.html`, `public/css/styles.css`.
   - Depends on: 1.2.
