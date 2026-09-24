@@ -1,6 +1,63 @@
-/* Pickup Brandeis - styles. Task 1.1: bare minimum. Colors and fonts arrive in Task 1.2. */
+/* Pickup Brandeis - styles.
+   Task 1.2: colors, font and basic look.
+
+   The ":root" block below holds "CSS variables": named values (like --navy)
+   that the rest of this file can reuse. To change a color for the whole app,
+   change it once here. */
+
+:root {
+  /* Brand colors (from the Figma design) */
+  --navy: #0b1f4b;
+  --blue: #1e6fff;
+  --white: #ffffff;
+  --gray: #f2f4f8;        /* page background */
+  --gray-line: #dde3ee;   /* thin borders */
+  --text-muted: #5b6577;  /* secondary text (strong enough contrast on white) */
+
+  /* Status colors (always paired with words, never color alone) */
+  --green: #17803f;
+  --red: #c62828;
+
+  /* Shape and spacing */
+  --radius-card: 20px;
+  --radius-button: 16px;
+  --radius-pill: 999px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+
+  /* Type */
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
 
 body {
   margin: 0;
-  font-family: sans-serif;
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--navy);
+  background: var(--gray);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  color: var(--navy);
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+h1 { font-size: 26px; }
+h2 { font-size: 18px; font-weight: 700; }
+h3 { font-size: 16px; font-weight: 700; }
+
+p {
+  margin: 0;
 }

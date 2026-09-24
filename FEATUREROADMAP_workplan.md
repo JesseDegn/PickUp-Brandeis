@@ -4,7 +4,7 @@ How to read this plan: every task is a small checkbox. Each one lists **what is 
 
 All app files live in the `public/` folder. "Run it" means: open a terminal in the project folder and type `npx wrangler dev`, then open the address it prints. (If you would rather not use Wrangler, `python3 -m http.server 8000 --directory public` and `http://localhost:8000` also works.)
 
-**Status:** Phase 0 complete. Task 1.1 complete. Next up: Task 1.2 (waiting for approval).
+**Status:** Phase 0 complete. Tasks 1.1 and 1.2 complete. Next up: Task 1.3.
 
 Legend: `[ ]` not started, `[x]` finished and tested.
 
@@ -30,7 +30,7 @@ Legend: `[ ]` not started, `[x]` finished and tested.
   - Done when: opening the page shows "Pickup Brandeis" and there are no errors in the browser's console (the hidden panel that lists problems; open it with F12 or right-click > Inspect).
   - Test it yourself: run it, see the words on the screen, open the console, and confirm no red messages.
 
-- [ ] **1.2 Add the colors, font, and basic look**
+- [x] **1.2 Add the colors, font, and basic look**
   - Builds: shared visual settings (navy, bright blue, white, light gray; Inter font; rounded corners; spacing) as named values called *CSS variables* (one place to change a color for the whole app).
   - Files: modify `public/css/styles.css`, `public/index.html` (font link).
   - Depends on: 1.1.
