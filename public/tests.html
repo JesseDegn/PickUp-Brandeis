@@ -32,6 +32,9 @@
   <script>
     (function () {
       PB.storage.useNamespace("pb.test.");
+      // The sample-game tests below need the samples switched on. (The last
+      // group tests the switched-off, empty-start mode.)
+      PB.config.SAMPLE_GAMES = true;
 
       const results = [];
       let currentGroup = null;
@@ -307,6 +310,44 @@
         PB.storage.resetAll(NOW);
         eq([PB.storage.getProfile(), PB.storage.getGames().length], [null, 4]);
       });
+
+      group("Sample games switched off (empty start)");
+      test("with samples off, the app starts with no games", function () {
+        PB.config.SAMPLE_GAMES = false;
+        ["profile", "players", "games"].forEach(PB.storage._rawRemove);
+        PB.storage.init(NOW);
+        eq([PB.storage.getGames().length, PB.storage.getUpcomingGames(NOW).length], [0, 0]);
+      });
+      test("with samples off, no invented players are saved", function () {
+        PB.config.SAMPLE_GAMES = false;
+        ["profile", "players", "games"].forEach(PB.storage._rawRemove);
+        PB.storage.init(NOW);
+        eq(PB.storage.getPlayer("p-mk").firstName, "Player");
+      });
+      test("with samples off, leftover sample games are removed but real games are kept", function () {
+        PB.config.SAMPLE_GAMES = true;
+        fresh();
+        const p = PB.storage.saveProfile({ firstName: "Real", lastName: "Person", email: "r@brandeis.edu", skill: "Beginner", positions: [] });
+        const mine = PB.storage.createGame({ date: "2026-09-30", time: "17:00", location: "Gosman Courts", skill: "Beginner", maxPlayers: "6", description: "" }, p.id);
+        PB.config.SAMPLE_GAMES = false;
+        PB.storage.init(NOW);
+        const games = PB.storage.getGames();
+        eq([games.length, games[0].id === mine.id], [1, true]);
+      });
+      test("with samples off, a created game works as the very first game", function () {
+        PB.config.SAMPLE_GAMES = false;
+        ["profile", "players", "games"].forEach(PB.storage._rawRemove);
+        PB.storage.init(NOW);
+        const p = PB.storage.saveProfile({ firstName: "First", lastName: "Host", email: "f@brandeis.edu", skill: "Beginner", positions: [] });
+        const g = PB.storage.createGame({ date: "2026-09-30", time: "17:00", location: "Gosman Courts", skill: "Beginner", maxPlayers: "6", description: "" }, p.id);
+        eq([PB.storage.getUpcomingGames(NOW).length, g.playerIds.length], [1, 1]);
+      });
+      test("with samples off, reset gives an empty app again", function () {
+        PB.config.SAMPLE_GAMES = false;
+        PB.storage.resetAll(NOW);
+        eq([PB.storage.getProfile(), PB.storage.getGames().length], [null, 0]);
+      });
+      PB.config.SAMPLE_GAMES = true;
 
       // ----- summary -----
       const failed = results.filter(function (r) { return !r.ok; });

@@ -471,7 +471,7 @@ Legend: `[ ]` not started, `[x]` finished and tested.
 
 ## Phase 11 — Shared online data (AFTER user testing; do not start until you approve)
 
-Goal: every student sees the same games. The screens stay the same; only what `storage.js` talks to changes. Uses Cloudflare Workers (a small server piece) and Cloudflare D1 (a free SQL database, meaning a database that stores information in tables). It does **not** need WebSockets or Durable Objects, since the app only re-checks for new data every 15 to 30 seconds.
+Goal: every student sees the same games, and the shared version starts completely empty (no sample games). The screens stay the same; only what `storage.js` talks to changes. Uses Cloudflare Workers (a small server piece) and Cloudflare D1 (a free SQL database, meaning a database that stores information in tables). It does **not** need WebSockets or Durable Objects, since the app only re-checks for new data every 15 to 30 seconds.
 
 - [ ] **11.1 Decide what to keep and what to change based on testing**
   - Builds: a short list of changes from what testers said.
@@ -529,11 +529,25 @@ Goal: every student sees the same games. The screens stay the same; only what `s
   - Done when: three phones all see and can join the same game and the counts agree.
   - Test it yourself: try it with two friends.
 
+- [ ] **11.9 Start the shared version empty (no fake games or fake players)**
+  - Builds: the shared database starts with zero games and zero players. The fictional sample games and sample players are removed from the shared version (they can stay in the single-device demo mode if you want them for classroom demos, controlled by one setting in `config.js`). Home shows its existing "No upcoming games yet" message and a Create button until a real student creates a game.
+  - Files: modify `public/js/config.js`, `public/js/storage.js`, `public/js/sampleData.js`, `src/worker.js`.
+  - Depends on: 11.4.
+  - Done when: a brand-new database shows an empty Home screen with no invented names anywhere.
+  - Test it yourself: open the live site with a fresh database and confirm no sample games or players appear; then create one game and confirm it is the only one listed.
+
 ---
 
 ## Later ideas (not in this version)
 
 Real email verification (a link sent to the student's inbox), notifications, more sports. Nothing here will be built until you decide to.
+
+- [x] **1.8 Add a switch for sample games vs. an empty start** (added ahead of schedule, at your request)
+  - Builds: `PB.config.SAMPLE_GAMES` in `config.js`. Set to `false`, the app starts with zero games and zero invented players, so the first game a tester creates is the only one on Home. Set to `true`, the four sample games return (handy for class demos). Switching it off also clears out any sample games a browser had already saved, while keeping real created games.
+  - Files: modified `public/js/config.js`, `public/js/storage.js`; added 5 checks to `public/tests.html`.
+  - Depends on: 3.1, 8.2.
+  - Done when: with the setting off, Home shows "No upcoming games yet" and a Create button; creating a game makes it the only card; refreshing does not bring back samples.
+  - Test it yourself: open the self-check page (should say ALL TESTS PASSED, 78) and try the app: empty Home, create a game, refresh, confirm it's still the only one.
 
 ---
 

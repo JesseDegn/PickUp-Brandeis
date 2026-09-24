@@ -78,7 +78,8 @@ window.PB = window.PB || {};
 
   // ----- setup -----
 
-  // Call once when the app starts. Makes sure sample players and games exist.
+  // Call once when the app starts. Sets up saved data (and the sample players
+  // and games, only if PB.config.SAMPLE_GAMES is true).
   function init(now) {
     now = now || PB.now();
     let players = read("players", null, isObject);
@@ -86,9 +87,11 @@ window.PB = window.PB || {};
 
     if (players === null) {
       players = {};
-      PB.sample.PEOPLE.forEach(function (p) {
-        players[p.id] = p;
-      });
+      if (PB.config.SAMPLE_GAMES) {
+        PB.sample.PEOPLE.forEach(function (p) {
+          players[p.id] = p;
+        });
+      }
       // Keep the current user's name available if a profile exists.
       const profile = read("profile", null, isObject);
       if (profile && profile.id) {
@@ -97,7 +100,13 @@ window.PB = window.PB || {};
       write("players", players);
     }
 
-    if (games === null) {
+    if (!PB.config.SAMPLE_GAMES) {
+      // Sample games are switched off: start empty, and clear away any sample
+      // games this browser saved earlier. Games people created are kept.
+      games = (games || []).filter(function (g) {
+        return !g.sample;
+      });
+    } else if (games === null) {
       games = PB.sample.makeGames(now);
     } else {
       // Keep the demo alive: if every sample game has passed, add fresh ones.

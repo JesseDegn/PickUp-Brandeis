@@ -7,6 +7,12 @@ window.PB = window.PB || {};
 PB.config = {
   APP_NAME: "Pickup Brandeis",
 
+  // Fictional sample games and players, so a demo does not look empty.
+  //   false = the app starts EMPTY (no games until a student creates one)
+  //   true  = the four sample games appear (handy for class demos)
+  // Change this one word, save, and push to GitHub to switch modes.
+  SAMPLE_GAMES: false,
+
   // Only email addresses ending like this are accepted (prototype sign-in).
   EMAIL_DOMAIN: "@brandeis.edu",
 
