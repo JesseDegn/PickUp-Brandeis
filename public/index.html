@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1f4b">
   <title>Pickup Brandeis</title>
   <!-- Inter font from Google Fonts. If it cannot load, the app falls back to the phone's own font. -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -11,18 +12,44 @@
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+  <a class="skip-link" href="#screen">Skip to content</a>
+
   <!-- #app is the phone-shaped frame. On a phone it fills the screen;
        on a computer it becomes a narrow column in the middle. -->
   <div id="app">
-    <!-- The app draws every screen inside this box. -->
-    <main id="screen">
-      <h1>Pickup Brandeis</h1>
-    </main>
+    <!-- Warning shown only if the browser blocks saving. -->
+    <div id="notice" class="notice" role="alert" hidden></div>
 
-    <!-- The bottom tab bar goes here (built in Task 1.4). -->
+    <!-- The app draws every screen inside this box. -->
+    <main id="screen" tabindex="-1"></main>
+
+    <!-- The bottom tab bar (Home, Create, My Games, Profile). -->
     <div id="tab-bar"></div>
+
+    <!-- Short pop-up messages ("Game created!"). -->
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
   </div>
 
+  <!-- Scripts load in this order: basics first, then screens, then app.js which starts everything.
+       They are plain script files, so you can also test the app by double-clicking this file. -->
+  <script src="js/config.js"></script>
+  <script src="js/format.js"></script>
+  <script src="js/sampleData.js"></script>
+  <script src="js/validation.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/router.js"></script>
+  <script src="js/components/tabBar.js"></script>
+  <script src="js/components/avatar.js"></script>
+  <script src="js/components/header.js"></script>
+  <script src="js/components/gameCard.js"></script>
+  <script src="js/actions.js"></script>
+  <script src="js/views/welcome.js"></script>
+  <script src="js/views/home.js"></script>
+  <script src="js/views/gameDetails.js"></script>
+  <script src="js/views/profile.js"></script>
+  <script src="js/views/create.js"></script>
+  <script src="js/views/myGames.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

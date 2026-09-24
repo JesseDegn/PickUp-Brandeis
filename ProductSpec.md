@@ -161,7 +161,7 @@ Quality
 12. Joining or creating a game requires a saved profile.
 13. The app updates the screen after every action. The user never has to refresh.
 14. Only basketball exists.
-15. Sample players are fictional. Sample games fill in when the app first loads and are generated relative to the current day, so "Today" and "Tomorrow" are always correct.
+15. Sample players are fictional. Sample games fill in when the app first loads and are generated relative to the current day, so "Today" and "Tomorrow" are always correct. If every sample game has already passed (for example, a tester returns days later), fresh sample games are added so the demo never looks empty. Games a person created are never removed.
 
 ## 8. Sample data (first load)
 
@@ -184,6 +184,7 @@ If a sample game's time has passed (for example, the app is opened late in the e
 - Text has strong contrast against its background.
 - Every form field has a visible label.
 - Important states do not rely only on color: FULL and GAME ON are also written in words, selected chips show a checkmark.
+- Text and button colors meet a 4.5:1 contrast ratio. The blue used for text and buttons is a slightly deeper shade (#1A5FE6) than the Figma blue (#1E6FFF) to meet this.
 - Clear error messages appear next to the problem field, in plain language.
 - A confirmation message appears after a game is created and after a profile is saved.
 - Empty sections explain what to do next.

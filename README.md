@@ -2,7 +2,7 @@
 
 **Pickup Brandeis** is a simple web app that helps Brandeis students find, create, and join pickup basketball games, so they no longer have to dig through group chats, texts, or word of mouth.
 
-> Status: **planning phase.** This repository currently contains only documentation. No application code has been written yet.
+> Status: **working prototype.** The main screens and features are built and tested (Phases 1 to 8 of the workplan). Polish, an accessibility review, and Cloudflare deployment are still to do.
 
 ---
 
@@ -72,11 +72,11 @@ The look is dark navy, bright blue, white, and light gray, with rounded cards, l
 
 ## How to run it locally
 
-*(This section applies after the app has been built. Until then there is nothing to run.)*
+**Simplest way:** double-click `public/index.html`. It opens in your browser and works right away, with no installation.
 
-You will need **Node.js** installed (a free program that lets your computer run JavaScript tools). Download it from <https://nodejs.org>.
+**Cloudflare's local preview (matches how it will run when deployed).** You will need **Node.js** installed (a free program that lets your computer run JavaScript tools). Download it from <https://nodejs.org>.
 
-**Easiest option (no install of Wrangler needed):**
+**Steps:**
 
 1. Open the project folder in a terminal (the text window where you type commands).
 2. Run: `npx wrangler dev`
@@ -113,18 +113,27 @@ brandeis-pickup/
 ├── .gitignore
 └── public/                 <- everything the browser receives
     ├── index.html
+    ├── tests.html          <- self-check page: open it to run the automated rule tests
     ├── css/styles.css
-    ├── images/             <- logo file goes here
+    ├── images/             <- the Brandeis seal
     └── js/
         ├── app.js          <- starts the app
         ├── router.js       <- switches between screens
-        ├── config.js       <- shared settings (locations, skill levels)
+        ├── config.js       <- shared settings (locations, skill levels, limits)
         ├── sampleData.js   <- fictional sample games and players
         ├── storage.js      <- the ONLY file that reads/writes saved data
         ├── validation.js   <- rules for email, height, player count
-        ├── components/     <- reusable pieces (game card, avatars, tab bar)
-        └── views/          <- one file per screen
+        ├── format.js       <- friendly dates, times, and names
+        ├── actions.js      <- what Join and Leave do
+        ├── ui.js           <- small helpers (safe text, pop-up messages)
+        ├── components/     <- reusable pieces (game card, avatars, tab bar, header)
+        └── views/          <- one file per screen (welcome, home, game details,
+                               create, my games, profile)
 ```
+
+## Testing
+
+Open `public/tests.html` in a browser. It runs the app's rules through dozens of checks (valid and invalid emails, heights, player counts, joining, leaving, full games, saving, and damaged data) and shows **ALL TESTS PASSED** or lists what failed. It uses its own storage, so it never touches your real profile or games.
 
 ## Not in this version
 

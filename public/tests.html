@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pickup Brandeis - Self-check</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 24px auto; padding: 0 16px; color: #0b1f4b; }
+    h1 { font-size: 24px; }
+    #summary { font-size: 20px; font-weight: 700; padding: 12px 16px; border-radius: 12px; margin: 16px 0; }
+    #summary.pass { background: #dcf5e5; color: #136c35; }
+    #summary.fail { background: #fde8e8; color: #c62828; }
+    ul { list-style: none; padding: 0; }
+    li { padding: 6px 0; border-bottom: 1px solid #dde3ee; font-size: 15px; }
+    .ok::before { content: "PASS  "; color: #136c35; font-weight: 700; }
+    .bad::before { content: "FAIL  "; color: #c62828; font-weight: 700; }
+    .detail { color: #c62828; font-size: 13px; }
+    h2 { font-size: 17px; margin-top: 24px; }
+  </style>
+</head>
+<body>
+  <h1>Pickup Brandeis self-check</h1>
+  <p>This page tests the app's rules (validation, joining, leaving, saving). It uses its own separate storage, so it never touches your real profile or games. Open it in a browser and look for "ALL TESTS PASSED".</p>
+  <div id="summary">Running...</div>
+  <div id="results"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/format.js"></script>
+  <script src="js/sampleData.js"></script>
+  <script src="js/validation.js"></script>
+  <script src="js/storage.js"></script>
+  <script>
+    (function () {
+      PB.storage.useNamespace("pb.test.");
+
+      const results = [];
+      let currentGroup = null;
+      let groupList = null;
+      const out = document.getElementById("results");
+
+      function group(name) {
+        const h = document.createElement("h2");
+        h.textContent = name;
+        out.appendChild(h);
+        groupList = document.createElement("ul");
+        out.appendChild(groupList);
+      }
+
+      function test(name, fn) {
+        let ok = true, detail = "";
+        try { fn(); } catch (e) { ok = false; detail = e.message; }
+        results.push({ name: name, ok: ok });
+        const li = document.createElement("li");
+        li.className = ok ? "ok" : "bad";
+        li.textContent = name;
+        if (!ok) {
+          const d = document.createElement("div");
+          d.className = "detail";
+          d.textContent = detail;
+          li.appendChild(d);
+        }
+        groupList.appendChild(li);
+      }
+
+      function eq(actual, expected, label) {
+        if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+          throw new Error((label || "value") + ": expected " + JSON.stringify(expected) + " but got " + JSON.stringify(actual));
+        }
+      }
+
+      // Thursday, Sept 24 2026, 12:00 noon. A fixed "now" keeps tests repeatable.
+      const NOW = new Date(2026, 8, 24, 12, 0, 0);
+      function fresh() {
+        ["profile", "players", "games"].forEach(PB.storage._rawRemove);
+        PB.storage.init(NOW);
+      }
+      const V = PB.validation;
+
+      group("Email must end in @brandeis.edu");
+      test("accepts a Brandeis email", function () { eq(V.email("maya@brandeis.edu"), ""); });
+      test("ignores capitals and extra spaces", function () { eq(V.email("  Maya@Brandeis.EDU  "), ""); });
+      test("rejects gmail with the exact message", function () { eq(V.email("maya@gmail.com"), "Please use your Brandeis email."); });
+      test("rejects look-alike domain", function () { eq(V.email("maya@brandeis.edu.evil.com"), "Please use your Brandeis email."); });
+      test("rejects subdomain", function () { eq(V.email("maya@student.brandeis.edu"), "Please use your Brandeis email."); });
+      test("rejects two @ signs", function () { eq(V.email("a@b@brandeis.edu"), "Please use your Brandeis email."); });
+      test("rejects nothing before the @", function () { eq(V.email("@brandeis.edu"), "Please use your Brandeis email."); });
+      test("rejects blank email", function () { eq(V.email("   "), "Please enter your Brandeis email."); });
+
+      group("Names and skill level");
+      test("blank first name is rejected", function () { eq(V.name("   ", "first name"), "Please enter your first name."); });
+      test("normal name is accepted", function () { eq(V.name("Maya", "first name"), ""); });
+      test("skill level is required", function () { eq(V.skill("", PB.config.PROFILE_SKILLS), "Please choose a skill level."); });
+      test("skill level must be one of the choices", function () { eq(V.skill("Expert", PB.config.PROFILE_SKILLS), "Please choose a skill level."); });
+      test("valid skill level is accepted", function () { eq(V.skill("Advanced", PB.config.PROFILE_SKILLS), ""); });
+
+      group("Height (optional)");
+      test("blank is fine", function () { eq(V.height("").error, ""); });
+      test("6'1\" works", function () { eq(V.height("6'1\"").normalized, "6'1\""); });
+      test("6' 1 works", function () { eq(V.height("6' 1").normalized, "6'1\""); });
+      test("5-10 works", function () { eq(V.height("5-10").normalized, "5'10\""); });
+      test("6ft 2in works", function () { eq(V.height("6ft 2in").normalized, "6'2\""); });
+      test("phone smart quotes work", function () { eq(V.height("6’1”").normalized, "6'1\""); });
+      test("feet only works", function () { eq(V.height("6'").normalized, "6'0\""); });
+      test("3'11\" is too short", function () { eq(V.height("3'11\"").error !== "", true); });
+      test("7'7\" is too tall", function () { eq(V.height("7'7\"").error !== "", true); });
+      test("6'12\" is not valid", function () { eq(V.height("6'12\"").error !== "", true); });
+      test("words are not valid", function () { eq(V.height("tall").error !== "", true); });
+
+      group("Number of players");
+      test("10 is fine", function () { eq(V.players("10"), ""); });
+      test("2 and 20 are fine", function () { eq([V.players("2"), V.players("20")], ["", ""]); });
+      test("0 is rejected", function () { eq(V.players("0") !== "", true); });
+      test("1 is rejected", function () { eq(V.players("1") !== "", true); });
+      test("21 is rejected", function () { eq(V.players("21") !== "", true); });
+      test("negative is rejected", function () { eq(V.players("-4") !== "", true); });
+      test("decimal is rejected", function () { eq(V.players("6.5") !== "", true); });
+      test("words are rejected", function () { eq(V.players("ten") !== "", true); });
+      test("blank is rejected", function () { eq(V.players("") !== "", true); });
+
+      group("Date and time");
+      test("a future time today is fine", function () { eq(V.futureDateTime("2026-09-24", "18:00", NOW), ""); });
+      test("an earlier time today is rejected", function () { eq(V.futureDateTime("2026-09-24", "09:00", NOW) !== "", true); });
+      test("yesterday is rejected", function () { eq(V.futureDateTime("2026-09-23", "18:00", NOW) !== "", true); });
+      test("blank date is rejected", function () { eq(V.date("") !== "", true); });
+      test("blank time is rejected", function () { eq(V.time("") !== "", true); });
+      test("\"Other\" location needs a name", function () { eq(V.location("Other", "  ") !== "", true); });
+      test("\"Other\" with a name is fine", function () { eq(V.location("Other", "Rabb lawn"), ""); });
+      test("description over 140 characters is rejected", function () { eq(V.description(new Array(142).join("a")) !== "", true); });
+
+      group("Friendly text");
+      test("time formats as 12-hour", function () { eq([PB.format.formatTime("18:00"), PB.format.formatTime("00:05"), PB.format.formatTime("12:30")], ["6:00 PM", "12:05 AM", "12:30 PM"]); });
+      test("today / tomorrow / weekday labels", function () {
+        eq([PB.format.dayLabel("2026-09-24", NOW), PB.format.dayLabel("2026-09-25", NOW), PB.format.dayLabel("2026-09-26", NOW), PB.format.dayLabel("2026-10-05", NOW)],
+          ["Today", "Tomorrow", "Saturday", "Mon, Oct 5"]);
+      });
+      test("initials", function () { eq(PB.format.initials({ firstName: "maya", lastName: "klein" }), "MK"); });
+
+      group("Sample games");
+      test("four sample games load with the right counts", function () {
+        fresh();
+        const games = PB.storage.getUpcomingGames(NOW);
+        eq(games.map(function (g) { return g.playerIds.length + "/" + g.maxPlayers; }), ["8/10", "6/10", "4/10", "10/10"]);
+      });
+      test("sample games are in time order", function () {
+        fresh();
+        const g = PB.storage.getUpcomingGames(NOW);
+        eq([g[0].date, g[1].date, g[2].date, g[3].date], ["2026-09-24", "2026-09-25", "2026-09-26", "2026-09-27"]);
+      });
+      test("the samples are basketball only", function () {
+        fresh();
+        eq(PB.storage.getGames().every(function (g) { return g.sport === "basketball"; }), true);
+      });
+      test("refreshing (init again) does not duplicate sample games", function () {
+        fresh();
+        PB.storage.init(NOW); PB.storage.init(NOW); PB.storage.init(NOW);
+        eq(PB.storage.getGames().length, 4);
+      });
+      test("past games are hidden from upcoming", function () {
+        fresh();
+        const later = new Date(2026, 8, 24, 20, 0, 0); // 8 PM: the 6 PM game is over
+        eq(PB.storage.getUpcomingGames(later).length, 3);
+      });
+      test("fresh sample games appear once every sample game has passed", function () {
+        fresh();
+        const muchLater = new Date(2026, 9, 5, 12, 0, 0);
+        PB.storage.init(muchLater);
+        eq(PB.storage.getUpcomingGames(muchLater).length, 4);
+      });
+
+      group("Profile");
+      test("saving a profile stores a tidy version and an id", function () {
+        fresh();
+        const p = PB.storage.saveProfile({ firstName: " Jesse ", lastName: "Degn", email: " Jesse@Brandeis.edu ", skill: "Intermediate", height: "6'1\"", positions: ["Point Guard", "Center"] });
+        eq([p.firstName, p.email, p.positions.length, !!p.id], ["Jesse", "jesse@brandeis.edu", 2, true]);
+        eq(PB.storage.getProfile().id, p.id);
+      });
+      test("saving again keeps the same id", function () {
+        fresh();
+        const a = PB.storage.saveProfile({ firstName: "A", lastName: "B", email: "a@brandeis.edu", skill: "Beginner", positions: [] });
+        const b = PB.storage.saveProfile({ firstName: "A2", lastName: "B", email: "a@brandeis.edu", skill: "Beginner", positions: [] });
+        eq(a.id, b.id);
+      });
+      test("no profile at first", function () { fresh(); eq(PB.storage.getProfile(), null); });
+
+      group("Joining and leaving");
+      function me() {
+        return PB.storage.saveProfile({ firstName: "Test", lastName: "User", email: "t@brandeis.edu", skill: "Beginner", positions: [] });
+      }
+      test("joining raises the count by one", function () {
+        fresh(); const p = me(); const g = PB.storage.getUpcomingGames(NOW)[0];
+        const r = PB.storage.joinGame(g.id, p.id, NOW);
+        eq([r.ok, PB.storage.getGame(g.id).playerIds.length], [true, 9]);
+      });
+      test("cannot join the same game twice", function () {
+        fresh(); const p = me(); const g = PB.storage.getUpcomingGames(NOW)[0];
+        PB.storage.joinGame(g.id, p.id, NOW);
+        const r = PB.storage.joinGame(g.id, p.id, NOW);
+        eq([r.ok, r.reason, PB.storage.getGame(g.id).playerIds.length], [false, "already", 9]);
+      });
+      test("leaving lowers the count by one", function () {
+        fresh(); const p = me(); const g = PB.storage.getUpcomingGames(NOW)[0];
+        PB.storage.joinGame(g.id, p.id, NOW);
+        const r = PB.storage.leaveGame(g.id, p.id, NOW);
+        eq([r.ok, PB.storage.getGame(g.id).playerIds.length], [true, 8]);
+      });
+      test("cannot leave a game you are not in", function () {
+        fresh(); const p = me(); const g = PB.storage.getUpcomingGames(NOW)[0];
+        const r = PB.storage.leaveGame(g.id, p.id, NOW);
+        eq([r.ok, r.reason, PB.storage.getGame(g.id).playerIds.length], [false, "not-joined", 8]);
+      });
+      test("cannot join a full game", function () {
+        fresh(); const p = me(); const full = PB.storage.getUpcomingGames(NOW)[3];
+        const r = PB.storage.joinGame(full.id, p.id, NOW);
+        eq([r.ok, r.reason, PB.storage.getGame(full.id).playerIds.length], [false, "full", 10]);
+      });
+      test("a game can be filled up to exactly its maximum, never beyond", function () {
+        fresh(); const p = me(); const g = PB.storage.getUpcomingGames(NOW)[0]; // 8 of 10
+        PB.storage.joinGame(g.id, p.id, NOW); // 9
+        const other = PB.storage.saveProfile; // (keep same profile; use fake ids for extra players)
+        eq(PB.storage.joinGame(g.id, "x1", NOW).ok, true); // 10
+        eq(PB.storage.joinGame(g.id, "x2", NOW).reason, "full");
+        eq(PB.storage.getGame(g.id).playerIds.length, 10);
+      });
+      test("a spot opens up again after someone leaves a full game", function () {
+        fresh(); const p = me(); const g = PB.storage.getUpcomingGames(NOW)[0];
+        PB.storage.joinGame(g.id, p.id, NOW); PB.storage.joinGame(g.id, "x1", NOW); // now 10
+        PB.storage.leaveGame(g.id, p.id, NOW);
+        eq(PB.storage.isFull(PB.storage.getGame(g.id)), false);
+      });
+      test("cannot join a game that already started", function () {
+        fresh(); const p = me(); const g = PB.storage.getUpcomingGames(NOW)[0];
+        const later = new Date(2026, 8, 24, 19, 0, 0);
+        eq(PB.storage.joinGame(g.id, p.id, later).reason, "started");
+      });
+      test("joining a game that does not exist is refused", function () {
+        fresh(); const p = me();
+        eq(PB.storage.joinGame("nope", p.id, NOW).reason, "not-found");
+      });
+
+      group("Creating games");
+      function make(extra) {
+        const base = { date: "2026-09-30", time: "17:00", location: "Gosman Courts", skill: "Beginner", maxPlayers: "6", description: " Bring water " };
+        return Object.assign(base, extra || {});
+      }
+      test("the creator is automatically counted as attending", function () {
+        fresh(); const p = me();
+        const g = PB.storage.createGame(make(), p.id);
+        eq([g.playerIds, g.creatorId === p.id, g.maxPlayers, g.description], [[p.id], true, 6, "Bring water"]);
+      });
+      test("a new game appears in the upcoming list", function () {
+        fresh(); const p = me();
+        const g = PB.storage.createGame(make(), p.id);
+        eq(PB.storage.getUpcomingGames(NOW).some(function (x) { return x.id === g.id; }), true);
+      });
+      test("a new game shows in both My Games sections", function () {
+        fresh(); const p = me();
+        const g = PB.storage.createGame(make(), p.id);
+        const mine = PB.storage.getMyGames(p.id, NOW);
+        eq([mine.joining.map(function (x) { return x.id; }), mine.created.map(function (x) { return x.id; })], [[g.id], [g.id]]);
+      });
+      test("joined games show under Games I'm Joining but not Created", function () {
+        fresh(); const p = me(); const g = PB.storage.getUpcomingGames(NOW)[0];
+        PB.storage.joinGame(g.id, p.id, NOW);
+        const mine = PB.storage.getMyGames(p.id, NOW);
+        eq([mine.joining.length, mine.created.length], [1, 0]);
+      });
+      test("leaving removes a game from Games I'm Joining", function () {
+        fresh(); const p = me(); const g = PB.storage.getUpcomingGames(NOW)[0];
+        PB.storage.joinGame(g.id, p.id, NOW); PB.storage.leaveGame(g.id, p.id, NOW);
+        eq(PB.storage.getMyGames(p.id, NOW).joining.length, 0);
+      });
+      test("the creator can leave their own game (it stays under Created)", function () {
+        fresh(); const p = me();
+        const g = PB.storage.createGame(make(), p.id);
+        PB.storage.leaveGame(g.id, p.id, NOW);
+        const mine = PB.storage.getMyGames(p.id, NOW);
+        eq([PB.storage.getGame(g.id).playerIds.length, mine.joining.length, mine.created.length], [0, 0, 1]);
+      });
+      test("past games do not appear in My Games", function () {
+        fresh(); const p = me(); const g = PB.storage.getUpcomingGames(NOW)[0];
+        PB.storage.joinGame(g.id, p.id, NOW);
+        const later = new Date(2026, 8, 24, 20, 0, 0);
+        eq(PB.storage.getMyGames(p.id, later).joining.length, 0);
+      });
+
+      group("Saving and damaged data");
+      test("data is still there after 'refresh' (init again)", function () {
+        fresh(); const p = me();
+        const g = PB.storage.createGame(make(), p.id);
+        PB.storage.joinGame(PB.storage.getUpcomingGames(NOW)[0].id, p.id, NOW);
+        PB.storage.init(NOW);
+        eq([!!PB.storage.getGame(g.id), PB.storage.getProfile().id === p.id, PB.storage.getMyGames(p.id, NOW).joining.length], [true, true, 2]);
+      });
+      test("damaged games data is replaced with fresh sample games", function () {
+        fresh();
+        PB.storage._rawSet("games", "{{{ not json");
+        PB.storage.init(NOW);
+        eq([PB.storage.status.recovered, PB.storage.getGames().length], [true, 4]);
+      });
+      test("damaged profile data does not crash", function () {
+        fresh();
+        PB.storage._rawSet("profile", "12345garbage");
+        eq(PB.storage.getProfile(), null);
+      });
+      test("reset brings back the sample games and removes the profile", function () {
+        fresh(); const p = me(); PB.storage.createGame(make(), p.id);
+        PB.storage.resetAll(NOW);
+        eq([PB.storage.getProfile(), PB.storage.getGames().length], [null, 4]);
+      });
+
+      // ----- summary -----
+      const failed = results.filter(function (r) { return !r.ok; });
+      const summary = document.getElementById("summary");
+      if (failed.length === 0) {
+        summary.textContent = "ALL TESTS PASSED (" + results.length + ")";
+        summary.className = "pass";
+      } else {
+        summary.textContent = failed.length + " of " + results.length + " tests FAILED";
+        summary.className = "fail";
+      }
+      window.__testResults = { total: results.length, failed: failed.map(function (f) { return f.name; }) };
+
+      // Clean up the test storage.
+      ["profile", "players", "games"].forEach(PB.storage._rawRemove);
+    })();
+  </script>
+</body>
+</html>

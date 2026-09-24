@@ -1,0 +1,22 @@
+// Cloudflare Workers settings for Pickup Brandeis.
+// "assets" means: serve the ready-made files in the public folder as they are.
+// There is no server code, so this runs on the Workers Free plan.
+{
+  "name": "pickup-brandeis",
+
+  // The date these settings were written. Cloudflare uses it to decide which
+  // version of its platform behavior to use. Update it when you deploy.
+  "compatibility_date": "2026-09-24",
+
+  "assets": {
+    "directory": "./public",
+    // Any web address that is not a real file shows index.html instead
+    // (this is what a single-page app needs).
+    "not_found_handling": "single-page-application"
+  },
+
+  // Keeps basic logs in the Cloudflare dashboard.
+  "observability": {
+    "enabled": true
+  }
+}
