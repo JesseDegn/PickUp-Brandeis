@@ -1,6 +1,14 @@
 // Cloudflare Workers settings for Pickup Brandeis.
-// "assets" means: serve the ready-made files in the public folder as they are.
-// There is no server code, so this runs on the Workers Free plan.
+//
+// This now combines two things:
+//   1. "assets" - the ready-made files in the public folder, served as they
+//      are (the app itself: HTML, CSS, JavaScript, images).
+//   2. "main" - one small piece of server code (src/worker.js) that handles
+//      requests starting with /api/, such as "list games" or "join this
+//      game." Everything else still goes straight to the files in "assets"
+//      and never touches src/worker.js - see "run_worker_first" below.
+//
+// This still runs on the Workers Free plan.
 {
   "name": "pickup-brandeis",
 
@@ -8,12 +16,32 @@
   // version of its platform behavior to use. Update it when you deploy.
   "compatibility_date": "2026-09-24",
 
+  "main": "src/worker.js",
+
   "assets": {
     "directory": "./public",
-    // Any web address that is not a real file shows index.html instead
-    // (this is what a single-page app needs).
+    // Lets src/worker.js reach the app's own files when it needs to
+    // (it doesn't currently, but this is the standard way to wire the two
+    // together).
+    "binding": "ASSETS",
+    // Only addresses starting with /api/ are handled by src/worker.js.
+    // Everything else (the app itself) is served directly from "assets"
+    // and never runs through src/worker.js at all.
+    "run_worker_first": ["/api/*"],
+    // Any web address that is not a real file and not /api/* shows
+    // index.html instead (this is what a single-page app needs).
     "not_found_handling": "single-page-application"
   },
+
+  // The shared database (see schema.sql and src/worker.js). "DB" is the name
+  // src/worker.js uses to reach it (as env.DB).
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pickup-brandeis-db",
+      "database_id": "3fd70097-7386-4630-b2e9-ca003439899f"
+    }
+  ],
 
   // Keeps basic logs in the Cloudflare dashboard.
   "observability": {

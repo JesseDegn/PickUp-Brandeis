@@ -95,9 +95,11 @@ window.PB = window.PB || {};
     return "";
   }
 
-  function description(value) {
-    if (value && String(value).length > C.DESCRIPTION_MAX) {
-      return "Please keep the description under " + C.DESCRIPTION_MAX + " characters.";
+  // The name a creator gives their game (for example "Thursday Night Run").
+  function gameName(value) {
+    if (isBlank(value)) return "Please name your game.";
+    if (String(value).trim().length > C.GAME_NAME_MAX) {
+      return "Please keep the name under " + C.GAME_NAME_MAX + " characters.";
     }
     return "";
   }
@@ -113,6 +115,6 @@ window.PB = window.PB || {};
     time: time,
     futureDateTime: futureDateTime,
     location: location,
-    description: description,
+    gameName: gameName,
   };
 })();

@@ -23,26 +23,36 @@ window.PB = window.PB || {};
     return null;
   }
 
-  function join(gameId) {
+  async function join(gameId, button) {
     const profile = requireProfile("Create your profile to join games.");
     if (!profile) return;
-    const result = PB.storage.joinGame(gameId, profile.id, PB.now());
-    if (result.ok) {
-      PB.ui.toast("You're in! See you on the court.", "success");
-    } else {
-      PB.ui.toast(REASONS[result.reason] || "Something went wrong.", "error");
+    if (button) button.disabled = true;
+    try {
+      const result = await PB.storage.joinGame(gameId, profile.id);
+      if (result.ok) {
+        PB.ui.toast("You're in! See you on the court.", "success");
+      } else {
+        PB.ui.toast(REASONS[result.reason] || "Something went wrong.", "error");
+      }
+    } catch (e) {
+      PB.ui.toast(e.message, "error");
     }
     PB.router.refresh(); // redraw right away so counts are correct
   }
 
-  function leave(gameId) {
+  async function leave(gameId, button) {
     const profile = requireProfile("Create your profile to join games.");
     if (!profile) return;
-    const result = PB.storage.leaveGame(gameId, profile.id, PB.now());
-    if (result.ok) {
-      PB.ui.toast("You left the game.", "success");
-    } else {
-      PB.ui.toast(REASONS[result.reason] || "Something went wrong.", "error");
+    if (button) button.disabled = true;
+    try {
+      const result = await PB.storage.leaveGame(gameId, profile.id);
+      if (result.ok) {
+        PB.ui.toast(result.deleted ? "You left the game. Since no one was left, it was removed." : "You left the game.", "success");
+      } else {
+        PB.ui.toast(REASONS[result.reason] || "Something went wrong.", "error");
+      }
+    } catch (e) {
+      PB.ui.toast(e.message, "error");
     }
     PB.router.refresh();
   }
@@ -52,8 +62,8 @@ window.PB = window.PB || {};
     const button = event.target.closest("[data-action]");
     if (!button || button.disabled) return;
     const action = button.dataset.action;
-    if (action === "join") join(button.dataset.id);
-    if (action === "leave") leave(button.dataset.id);
+    if (action === "join") join(button.dataset.id, button);
+    if (action === "leave") leave(button.dataset.id, button);
   }
 
   PB.actions = { requireProfile: requireProfile, join: join, leave: leave, onClick: onClick };

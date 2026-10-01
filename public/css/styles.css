@@ -266,6 +266,38 @@ a {
   z-index: 1;
 }
 
+/* ---------- Admin dashboard ---------- */
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+.stat {
+  background: var(--white);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+  text-align: center;
+}
+.stat__value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--blue-strong);
+}
+.stat__label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.admin-game {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.admin-game__info p {
+  font-size: 14px;
+}
+
 .chip {
   display: inline-flex;
   align-items: center;

@@ -27,6 +27,9 @@ PB.views = PB.views || {};
       PB.header.html({ title: "Create a Game", subtitle: "Takes under a minute." }) +
       '<div class="page-body">' +
       '<form class="card form" id="create-form" novalidate>' +
+      '<div class="field"><label for="name">Name</label>' +
+      '<input id="name" name="name" type="text" maxlength="' + C.GAME_NAME_MAX + '" autocomplete="off" placeholder="e.g. Thursday Night Run" aria-describedby="err-name">' +
+      '<p class="field-error" id="err-name" role="alert"></p></div>' +
       '<div class="field"><label for="date">Date</label>' +
       '<input id="date" name="date" type="date" value="' + today + '" min="' + today + '" aria-describedby="err-date">' +
       '<p class="field-error" id="err-date" role="alert"></p></div>' +
@@ -46,10 +49,6 @@ PB.views = PB.views || {};
       '<input id="maxPlayers" name="maxPlayers" type="text" inputmode="numeric" value="10" autocomplete="off" aria-describedby="hint-players err-maxPlayers">' +
       '<p class="hint" id="hint-players">A whole number from ' + C.MIN_PLAYERS + " to " + C.MAX_PLAYERS + ", including you.</p>" +
       '<p class="field-error" id="err-maxPlayers" role="alert"></p></div>' +
-      '<div class="field"><label for="description">Description (optional)</label>' +
-      '<textarea id="description" name="description" rows="3" maxlength="' + C.DESCRIPTION_MAX + '" aria-describedby="hint-desc err-description"></textarea>' +
-      '<p class="hint" id="hint-desc"><span id="desc-count">0</span>/' + C.DESCRIPTION_MAX + " characters</p>" +
-      '<p class="field-error" id="err-description" role="alert"></p></div>' +
       '<button type="submit" class="btn btn--primary">CREATE GAME</button>' +
       "</form></div>";
 
@@ -70,8 +69,6 @@ PB.views = PB.views || {};
     const form = container.querySelector("#create-form");
     const locationSelect = form.querySelector("#location");
     const otherField = form.querySelector("#other-field");
-    const description = form.querySelector("#description");
-    const counter = form.querySelector("#desc-count");
 
     // Show the "Location name" box only when "Other" is chosen.
     locationSelect.addEventListener("change", function () {
@@ -79,11 +76,7 @@ PB.views = PB.views || {};
       if (!otherField.hidden) form.querySelector("#otherLocation").focus();
     });
 
-    description.addEventListener("input", function () {
-      counter.textContent = String(description.value.length);
-    });
-
-    form.addEventListener("submit", function (event) {
+    form.addEventListener("submit", async function (event) {
       event.preventDefault();
       const profile = PB.actions.requireProfile("Create your profile before creating a game.");
       if (!profile) return;
@@ -91,19 +84,20 @@ PB.views = PB.views || {};
       const now = PB.now();
       const skillPick = form.querySelector('input[name="skill"]:checked');
       const data = {
+        name: form.name.value,
         date: form.date.value,
         time: form.time.value,
         locationChoice: form.location.value,
         otherLocation: form.otherLocation.value,
         skill: skillPick ? skillPick.value : "",
         maxPlayers: form.maxPlayers.value,
-        description: form.description.value,
       };
 
       const V = PB.validation;
       const dateError = V.date(data.date) || V.futureDateTime(data.date, data.time, now);
       const timeError = V.time(data.time);
       const errors = {
+        name: V.gameName(data.name),
         date: dateError,
         time: timeError,
         // A problem with the dropdown itself, or with the typed "Other" name.
@@ -111,7 +105,6 @@ PB.views = PB.views || {};
         otherLocation: data.locationChoice === "Other" ? V.location(data.locationChoice, data.otherLocation) : "",
         skill: V.skill(data.skill, C.GAME_SKILLS),
         maxPlayers: V.players(data.maxPlayers),
-        description: V.description(data.description),
       };
 
       // The "future" message belongs next to the time field when the date itself is fine.
@@ -120,7 +113,7 @@ PB.views = PB.views || {};
         errors.time = V.futureDateTime(data.date, data.time, now);
       }
 
-      const order = ["date", "time", "location", "otherLocation", "skill", "maxPlayers", "description"];
+      const order = ["name", "date", "time", "location", "otherLocation", "skill", "maxPlayers"];
       let firstBad = null;
       order.forEach(function (id) {
         setError(container, id, errors[id]);
@@ -134,12 +127,19 @@ PB.views = PB.views || {};
       }
 
       const location = data.locationChoice === "Other" ? data.otherLocation.trim() : data.locationChoice;
-      PB.storage.createGame(
-        { date: data.date, time: data.time, location: location, skill: data.skill, maxPlayers: data.maxPlayers, description: data.description },
-        profile.id
-      );
-      PB.ui.toast("Game created! You're in, and it's on the Home screen.", "success");
-      PB.router.navigate("#/home");
+      const submitButton = form.querySelector('button[type="submit"]');
+      submitButton.disabled = true;
+      try {
+        await PB.storage.createGame(
+          { name: data.name.trim(), date: data.date, time: data.time, location: location, skill: data.skill, maxPlayers: data.maxPlayers },
+          profile.id
+        );
+        PB.ui.toast("Game created! You're in, and it's on the Home screen.", "success");
+        PB.router.navigate("#/home");
+      } catch (e) {
+        submitButton.disabled = false;
+        PB.ui.toast(e.message, "error");
+      }
     });
   }
 

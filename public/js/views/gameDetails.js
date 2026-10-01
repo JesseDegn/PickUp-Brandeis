@@ -31,7 +31,9 @@ PB.views = PB.views || {};
     const players = game.playerIds.map(PB.storage.getPlayer);
     const creator = PB.storage.getPlayer(game.creatorId);
     const gameOn = game.playerIds.length >= game.maxPlayers;
+    const isCreator = !!profile && profile.id === game.creatorId;
 
+    header.title = game.name;
     header.subtitle = PB.format.formatWhen(game, now);
 
     const banner = gameOn
@@ -48,10 +50,6 @@ PB.views = PB.views || {};
       row("Confirmed", game.playerIds.length + " / " + game.maxPlayers) +
       row("Created by", PB.format.fullName(creator)) +
       "</dl>";
-
-    const description = game.description
-      ? '<section class="card"><h2>About this game</h2><p class="muted">' + esc(game.description) + "</p></section>"
-      : "";
 
     const playerItems = players
       .map(function (p) {
@@ -71,9 +69,53 @@ PB.views = PB.views || {};
       ? '<div class="banner banner--info" role="status">This game has already started.</div>'
       : PB.gameCard.actionButton(game, ctx);
 
+    const deleteSection = isCreator
+      ? '<section class="card reset" aria-labelledby="delete-title">' +
+        '<h2 id="delete-title">Creator tools</h2>' +
+        '<p class="muted">Deletes this game for everyone. This cannot be undone.</p>' +
+        '<div id="delete-area"><button type="button" class="btn btn--outline" id="delete-start">DELETE GAME</button></div>' +
+        "</section>"
+      : "";
+
     container.innerHTML =
       PB.header.html(header) +
-      '<div class="page-body">' + banner + info + description + playerList + action + "</div>";
+      '<div class="page-body">' + banner + info + playerList + action + deleteSection + "</div>";
+
+    if (isCreator) bindDelete(container, game.id, profile.id);
+  }
+
+  function bindDelete(container, gameId, creatorId) {
+    const area = container.querySelector("#delete-area");
+    if (!area) return;
+    area.addEventListener("click", async function (event) {
+      const id = event.target.id;
+      if (id === "delete-start") {
+        area.innerHTML =
+          '<p role="alert"><strong>Delete this game?</strong> This removes it for everyone and cannot be undone.</p>' +
+          '<div class="button-row"><button type="button" class="btn btn--danger" id="delete-yes">YES, DELETE</button>' +
+          '<button type="button" class="btn btn--outline" id="delete-no">CANCEL</button></div>';
+        const yes = area.querySelector("#delete-yes");
+        if (yes) yes.focus();
+      } else if (id === "delete-no") {
+        PB.router.refresh();
+      } else if (id === "delete-yes") {
+        const yes = area.querySelector("#delete-yes");
+        if (yes) yes.disabled = true;
+        try {
+          const result = await PB.storage.deleteGame(gameId, creatorId);
+          if (result.ok) {
+            PB.ui.toast("Game deleted.", "success");
+            PB.router.navigate("#/home");
+          } else {
+            PB.ui.toast("That game could not be deleted.", "error");
+            PB.router.refresh();
+          }
+        } catch (e) {
+          PB.ui.toast(e.message, "error");
+          PB.router.refresh();
+        }
+      }
+    });
   }
 
   PB.views.gameDetails = { render: render };

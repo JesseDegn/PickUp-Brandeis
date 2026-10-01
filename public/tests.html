@@ -20,49 +20,141 @@
 </head>
 <body>
   <h1>Pickup Brandeis self-check</h1>
-  <p>This page tests the app's rules (validation, joining, leaving, saving). It uses its own separate storage, so it never touches your real profile or games. Open it in a browser and look for "ALL TESTS PASSED".</p>
+  <p>This page tests the app's rules (validation, joining, leaving, saving). The shared-database calls in here talk to a
+  pretend, in-page copy of the server (not the real one), so this page never touches real students' data. Open it in a
+  browser and look for "ALL TESTS PASSED".</p>
+  <p><strong>Note:</strong> this checks that the app's own code (storage.js) calls the server correctly and handles every
+  answer it can send back. It does not replace testing the real server code (src/worker.js) against the real database,
+  which is done separately.</p>
   <div id="summary">Running...</div>
   <div id="results"></div>
 
   <script src="js/config.js"></script>
   <script src="js/format.js"></script>
-  <script src="js/sampleData.js"></script>
   <script src="js/validation.js"></script>
   <script src="js/storage.js"></script>
   <script>
     (function () {
       PB.storage.useNamespace("pb.test.");
-      // The sample-game tests below need the samples switched on. (The last
-      // group tests the switched-off, empty-start mode.)
-      PB.config.SAMPLE_GAMES = true;
 
-      const results = [];
-      let currentGroup = null;
-      let groupList = null;
-      const out = document.getElementById("results");
+      // ----- a pretend server, entirely in this page's memory -----
+      // This copies the important rules from src/worker.js closely enough to
+      // test storage.js against, without a real network or database. See the
+      // note at the top of the page.
+      let db;
+      function resetDb() {
+        db = { players: {}, games: {} }; // games[id] = { ...fields, memberIds: [] }
+      }
+      resetDb();
 
-      function group(name) {
-        const h = document.createElement("h2");
-        h.textContent = name;
-        out.appendChild(h);
-        groupList = document.createElement("ul");
-        out.appendChild(groupList);
+      function shapedGames() {
+        return Object.values(db.games).map(function (g) {
+          const players = g.memberIds.map(function (id) {
+            return db.players[id]
+              ? { id: id, firstName: db.players[id].firstName, lastName: db.players[id].lastName }
+              : { id: id, firstName: "Player", lastName: "" };
+          });
+          const creator = db.players[g.creatorId]
+            ? { id: g.creatorId, firstName: db.players[g.creatorId].firstName, lastName: db.players[g.creatorId].lastName }
+            : { id: g.creatorId, firstName: "Player", lastName: "" };
+          return {
+            id: g.id, sport: "basketball", name: g.name, date: g.date, time: g.time, location: g.location, skill: g.skill,
+            maxPlayers: g.maxPlayers, creatorId: g.creatorId,
+            playerIds: g.memberIds.slice(), players: players, creator: creator,
+          };
+        });
       }
 
-      function test(name, fn) {
-        let ok = true, detail = "";
-        try { fn(); } catch (e) { ok = false; detail = e.message; }
-        results.push({ name: name, ok: ok });
-        const li = document.createElement("li");
-        li.className = ok ? "ok" : "bad";
-        li.textContent = name;
-        if (!ok) {
-          const d = document.createElement("div");
-          d.className = "detail";
-          d.textContent = detail;
-          li.appendChild(d);
+      function ok(data, status) {
+        return new Response(JSON.stringify(data), { status: status || 200, headers: { "content-type": "application/json" } });
+      }
+      function err(message, status) {
+        return ok({ error: message }, status || 400);
+      }
+
+      async function mockFetch(url, options) {
+        const method = (options && options.method) || "GET";
+        const body = options && options.body ? JSON.parse(options.body) : null;
+
+        if (url === "/api/games" && method === "GET") {
+          return ok({ games: shapedGames() });
         }
-        groupList.appendChild(li);
+
+        if (url === "/api/profile" && method === "POST") {
+          const V = PB.validation;
+          const firstError = V.name(body.firstName, "first name") || V.name(body.lastName, "last name") ||
+            V.email(body.email) || V.skill(body.skill, PB.config.PROFILE_SKILLS);
+          if (firstError) return err(firstError);
+          const email = String(body.email).trim().toLowerCase();
+          const existing = Object.values(db.players).find(function (p) { return p.email === email; });
+          const id = existing ? existing.id : (body.id || "u-" + Math.random().toString(36).slice(2, 9));
+          const profile = {
+            id: id, firstName: String(body.firstName).trim(), lastName: String(body.lastName).trim(),
+            email: email, skill: body.skill, height: body.height || "", positions: body.positions || [],
+          };
+          db.players[id] = profile;
+          return ok({ profile: profile });
+        }
+
+        if (url === "/api/games" && method === "POST") {
+          if (!body.creatorId || !db.players[body.creatorId]) return err("Please create your profile first.");
+          const nameError = PB.validation.gameName(body.name);
+          if (nameError) return err(nameError);
+          const id = "g-" + Math.random().toString(36).slice(2, 9);
+          db.games[id] = {
+            id: id, name: String(body.name || "").trim(), date: body.date, time: body.time, location: body.location, skill: body.skill,
+            maxPlayers: Number(body.maxPlayers),
+            creatorId: body.creatorId, memberIds: [body.creatorId],
+          };
+          return ok({ game: shapedGames().find(function (g) { return g.id === id; }) });
+        }
+
+        let m = url.match(/^\/api\/games\/([^/]+)\/join$/);
+        if (m && method === "POST") {
+          const game = db.games[decodeURIComponent(m[1])];
+          if (!game) return ok({ ok: false, reason: "not-found" });
+          if (game.memberIds.indexOf(body.playerId) !== -1) return ok({ ok: false, reason: "already" });
+          if (game.memberIds.length >= game.maxPlayers) return ok({ ok: false, reason: "full" });
+          game.memberIds.push(body.playerId);
+          return ok({ ok: true, game: shapedGames().find(function (g) { return g.id === game.id; }) });
+        }
+
+        m = url.match(/^\/api\/games\/([^/]+)\/leave$/);
+        if (m && method === "POST") {
+          const game = db.games[decodeURIComponent(m[1])];
+          if (!game) return ok({ ok: false, reason: "not-found" });
+          const i = game.memberIds.indexOf(body.playerId);
+          if (i === -1) return ok({ ok: false, reason: "not-joined" });
+          game.memberIds.splice(i, 1);
+          if (game.memberIds.length === 0) {
+            delete db.games[game.id];
+            return ok({ ok: true, game: null, deleted: true });
+          }
+          return ok({ ok: true, game: shapedGames().find(function (g) { return g.id === game.id; }), deleted: false });
+        }
+
+        m = url.match(/^\/api\/games\/([^/]+)\/delete$/);
+        if (m && method === "POST") {
+          const game = db.games[decodeURIComponent(m[1])];
+          if (!game) return ok({ ok: false, reason: "not-found" });
+          if (game.creatorId !== body.creatorId) return ok({ ok: false, reason: "not-creator" });
+          delete db.games[game.id];
+          return ok({ ok: true });
+        }
+
+        return err("Unknown API address.", 404);
+      }
+      PB.storage.useFetch(mockFetch);
+
+      // ----- tiny test runner (tests may be async, and run in order) -----
+      const groups = [];
+      let currentGroup = null;
+      function group(name) {
+        currentGroup = { name: name, tests: [] };
+        groups.push(currentGroup);
+      }
+      function test(name, fn) {
+        currentGroup.tests.push({ name: name, fn: fn });
       }
 
       function eq(actual, expected, label) {
@@ -73,10 +165,26 @@
 
       // Thursday, Sept 24 2026, 12:00 noon. A fixed "now" keeps tests repeatable.
       const NOW = new Date(2026, 8, 24, 12, 0, 0);
-      function fresh() {
-        ["profile", "players", "games"].forEach(PB.storage._rawRemove);
-        PB.storage.init(NOW);
+
+      // Clears the pretend server and this device's saved profile, then
+      // reloads the (now empty) games list into storage.js's cache - the
+      // same steps a real navigation performs (see router.js).
+      async function fresh() {
+        resetDb();
+        PB.storage._rawRemove("profile");
+        await PB.storage.refreshGames();
       }
+      let nextEmail = 1;
+      async function makePlayer(name) {
+        return PB.storage.saveProfile({
+          firstName: name || "Test", lastName: "User", email: "t" + nextEmail++ + "@brandeis.edu", skill: "Beginner", positions: [],
+        });
+      }
+      function makeGameFields(extra) {
+        const base = { name: "Thursday Run", date: "2026-09-30", time: "17:00", location: "Gosman Courts", skill: "Beginner", maxPlayers: "6" };
+        return Object.assign(base, extra || {});
+      }
+
       const V = PB.validation;
 
       group("Email must end in @brandeis.edu");
@@ -128,7 +236,12 @@
       test("blank time is rejected", function () { eq(V.time("") !== "", true); });
       test("\"Other\" location needs a name", function () { eq(V.location("Other", "  ") !== "", true); });
       test("\"Other\" with a name is fine", function () { eq(V.location("Other", "Rabb lawn"), ""); });
-      test("description over 140 characters is rejected", function () { eq(V.description(new Array(142).join("a")) !== "", true); });
+
+      group("Game name");
+      test("a normal name is accepted", function () { eq(V.gameName("Thursday Night Run"), ""); });
+      test("blank is rejected", function () { eq(V.gameName("   ") !== "", true); });
+      test("over 40 characters is rejected", function () { eq(V.gameName(new Array(42).join("a")) !== "", true); });
+      test("exactly 40 characters is fine", function () { eq(V.gameName(new Array(41).join("a")), ""); });
 
       group("Friendly text");
       test("time formats as 12-hour", function () { eq([PB.format.formatTime("18:00"), PB.format.formatTime("00:05"), PB.format.formatTime("12:30")], ["6:00 PM", "12:05 AM", "12:30 PM"]); });
@@ -138,231 +251,259 @@
       });
       test("initials", function () { eq(PB.format.initials({ firstName: "maya", lastName: "klein" }), "MK"); });
 
-      group("Sample games");
-      test("four sample games load with the right counts", function () {
-        fresh();
-        const games = PB.storage.getUpcomingGames(NOW);
-        eq(games.map(function (g) { return g.playerIds.length + "/" + g.maxPlayers; }), ["8/10", "6/10", "4/10", "10/10"]);
+      group("Profile (talking to the shared server)");
+      test("the app starts with no profile and no games", async function () {
+        await fresh();
+        eq([PB.storage.getProfile(), PB.storage.getGames().length], [null, 0]);
       });
-      test("sample games are in time order", function () {
-        fresh();
-        const g = PB.storage.getUpcomingGames(NOW);
-        eq([g[0].date, g[1].date, g[2].date, g[3].date], ["2026-09-24", "2026-09-25", "2026-09-26", "2026-09-27"]);
-      });
-      test("the samples are basketball only", function () {
-        fresh();
-        eq(PB.storage.getGames().every(function (g) { return g.sport === "basketball"; }), true);
-      });
-      test("refreshing (init again) does not duplicate sample games", function () {
-        fresh();
-        PB.storage.init(NOW); PB.storage.init(NOW); PB.storage.init(NOW);
-        eq(PB.storage.getGames().length, 4);
-      });
-      test("past games are hidden from upcoming", function () {
-        fresh();
-        const later = new Date(2026, 8, 24, 20, 0, 0); // 8 PM: the 6 PM game is over
-        eq(PB.storage.getUpcomingGames(later).length, 3);
-      });
-      test("fresh sample games appear once every sample game has passed", function () {
-        fresh();
-        const muchLater = new Date(2026, 9, 5, 12, 0, 0);
-        PB.storage.init(muchLater);
-        eq(PB.storage.getUpcomingGames(muchLater).length, 4);
-      });
-
-      group("Profile");
-      test("saving a profile stores a tidy version and an id", function () {
-        fresh();
-        const p = PB.storage.saveProfile({ firstName: " Jesse ", lastName: "Degn", email: " Jesse@Brandeis.edu ", skill: "Intermediate", height: "6'1\"", positions: ["Point Guard", "Center"] });
+      test("saving a profile stores a tidy version and an id", async function () {
+        await fresh();
+        const p = await PB.storage.saveProfile({ firstName: " Jesse ", lastName: "Degn", email: " Jesse@Brandeis.edu ", skill: "Intermediate", height: "6'1\"", positions: ["Point Guard", "Center"] });
         eq([p.firstName, p.email, p.positions.length, !!p.id], ["Jesse", "jesse@brandeis.edu", 2, true]);
         eq(PB.storage.getProfile().id, p.id);
       });
-      test("saving again keeps the same id", function () {
-        fresh();
-        const a = PB.storage.saveProfile({ firstName: "A", lastName: "B", email: "a@brandeis.edu", skill: "Beginner", positions: [] });
-        const b = PB.storage.saveProfile({ firstName: "A2", lastName: "B", email: "a@brandeis.edu", skill: "Beginner", positions: [] });
+      test("saving again on the same device keeps the same id", async function () {
+        await fresh();
+        const a = await PB.storage.saveProfile({ firstName: "A", lastName: "B", email: "a@brandeis.edu", skill: "Beginner", positions: [] });
+        const b = await PB.storage.saveProfile({ firstName: "A2", lastName: "B", email: "a@brandeis.edu", skill: "Beginner", positions: [] });
         eq(a.id, b.id);
       });
-      test("no profile at first", function () { fresh(); eq(PB.storage.getProfile(), null); });
-
-      group("Joining and leaving");
-      function me() {
-        return PB.storage.saveProfile({ firstName: "Test", lastName: "User", email: "t@brandeis.edu", skill: "Beginner", positions: [] });
-      }
-      test("joining raises the count by one", function () {
-        fresh(); const p = me(); const g = PB.storage.getUpcomingGames(NOW)[0];
-        const r = PB.storage.joinGame(g.id, p.id, NOW);
-        eq([r.ok, PB.storage.getGame(g.id).playerIds.length], [true, 9]);
+      test("saving from a different device with the same email reuses the same person", async function () {
+        await fresh();
+        const a = await PB.storage.saveProfile({ firstName: "A", lastName: "B", email: "same@brandeis.edu", skill: "Beginner", positions: [] });
+        PB.storage._rawRemove("profile"); // pretend this is a second, brand-new browser
+        const b = await PB.storage.saveProfile({ firstName: "A", lastName: "B", email: "same@brandeis.edu", skill: "Beginner", positions: [] });
+        eq(a.id, b.id);
       });
-      test("cannot join the same game twice", function () {
-        fresh(); const p = me(); const g = PB.storage.getUpcomingGames(NOW)[0];
-        PB.storage.joinGame(g.id, p.id, NOW);
-        const r = PB.storage.joinGame(g.id, p.id, NOW);
-        eq([r.ok, r.reason, PB.storage.getGame(g.id).playerIds.length], [false, "already", 9]);
-      });
-      test("leaving lowers the count by one", function () {
-        fresh(); const p = me(); const g = PB.storage.getUpcomingGames(NOW)[0];
-        PB.storage.joinGame(g.id, p.id, NOW);
-        const r = PB.storage.leaveGame(g.id, p.id, NOW);
-        eq([r.ok, PB.storage.getGame(g.id).playerIds.length], [true, 8]);
-      });
-      test("cannot leave a game you are not in", function () {
-        fresh(); const p = me(); const g = PB.storage.getUpcomingGames(NOW)[0];
-        const r = PB.storage.leaveGame(g.id, p.id, NOW);
-        eq([r.ok, r.reason, PB.storage.getGame(g.id).playerIds.length], [false, "not-joined", 8]);
-      });
-      test("cannot join a full game", function () {
-        fresh(); const p = me(); const full = PB.storage.getUpcomingGames(NOW)[3];
-        const r = PB.storage.joinGame(full.id, p.id, NOW);
-        eq([r.ok, r.reason, PB.storage.getGame(full.id).playerIds.length], [false, "full", 10]);
-      });
-      test("a game can be filled up to exactly its maximum, never beyond", function () {
-        fresh(); const p = me(); const g = PB.storage.getUpcomingGames(NOW)[0]; // 8 of 10
-        PB.storage.joinGame(g.id, p.id, NOW); // 9
-        const other = PB.storage.saveProfile; // (keep same profile; use fake ids for extra players)
-        eq(PB.storage.joinGame(g.id, "x1", NOW).ok, true); // 10
-        eq(PB.storage.joinGame(g.id, "x2", NOW).reason, "full");
-        eq(PB.storage.getGame(g.id).playerIds.length, 10);
-      });
-      test("a spot opens up again after someone leaves a full game", function () {
-        fresh(); const p = me(); const g = PB.storage.getUpcomingGames(NOW)[0];
-        PB.storage.joinGame(g.id, p.id, NOW); PB.storage.joinGame(g.id, "x1", NOW); // now 10
-        PB.storage.leaveGame(g.id, p.id, NOW);
-        eq(PB.storage.isFull(PB.storage.getGame(g.id)), false);
-      });
-      test("cannot join a game that already started", function () {
-        fresh(); const p = me(); const g = PB.storage.getUpcomingGames(NOW)[0];
-        const later = new Date(2026, 8, 24, 19, 0, 0);
-        eq(PB.storage.joinGame(g.id, p.id, later).reason, "started");
-      });
-      test("joining a game that does not exist is refused", function () {
-        fresh(); const p = me();
-        eq(PB.storage.joinGame("nope", p.id, NOW).reason, "not-found");
+      test("the server rejects a non-Brandeis email even if the browser check is skipped", async function () {
+        await fresh();
+        let message = "";
+        try { await PB.storage.saveProfile({ firstName: "A", lastName: "B", email: "a@gmail.com", skill: "Beginner", positions: [] }); }
+        catch (e) { message = e.message; }
+        eq(message, "Please use your Brandeis email.");
       });
 
       group("Creating games");
-      function make(extra) {
-        const base = { date: "2026-09-30", time: "17:00", location: "Gosman Courts", skill: "Beginner", maxPlayers: "6", description: " Bring water " };
-        return Object.assign(base, extra || {});
-      }
-      test("the creator is automatically counted as attending", function () {
-        fresh(); const p = me();
-        const g = PB.storage.createGame(make(), p.id);
-        eq([g.playerIds, g.creatorId === p.id, g.maxPlayers, g.description], [[p.id], true, 6, "Bring water"]);
+      test("the creator is automatically counted as attending", async function () {
+        await fresh(); const p = await makePlayer();
+        const g = await PB.storage.createGame(makeGameFields(), p.id);
+        eq([g.playerIds, g.creatorId === p.id, g.maxPlayers, g.name], [[p.id], true, 6, "Thursday Run"]);
       });
-      test("a new game appears in the upcoming list", function () {
-        fresh(); const p = me();
-        const g = PB.storage.createGame(make(), p.id);
-        eq(PB.storage.getUpcomingGames(NOW).some(function (x) { return x.id === g.id; }), true);
+      test("creating a game with a blank name is refused", async function () {
+        await fresh(); const p = await makePlayer();
+        let message = "";
+        try { await PB.storage.createGame(makeGameFields({ name: "   " }), p.id); }
+        catch (e) { message = e.message; }
+        eq(message.length > 0, true);
       });
-      test("a new game shows in both My Games sections", function () {
-        fresh(); const p = me();
-        const g = PB.storage.createGame(make(), p.id);
+      test("a new game appears once the games list is refreshed", async function () {
+        await fresh(); const p = await makePlayer();
+        const g = await PB.storage.createGame(makeGameFields(), p.id);
+        eq(PB.storage.getGame(g.id), null); // not in the cache yet...
+        await PB.storage.refreshGames();
+        eq(!!PB.storage.getGame(g.id), true); // ...until refreshed, same as router.js does
+      });
+      test("creating a game without a saved profile is refused", async function () {
+        await fresh();
+        let message = "";
+        try { await PB.storage.createGame(makeGameFields(), "someone-made-up"); }
+        catch (e) { message = e.message; }
+        eq(message, "Please create your profile first.");
+      });
+
+      group("Joining and leaving");
+      test("joining raises the count by one", async function () {
+        await fresh(); const p = await makePlayer();
+        const g = await PB.storage.createGame(makeGameFields({ maxPlayers: "10" }), p.id);
+        const other = await makePlayer("Other");
+        const r = await PB.storage.joinGame(g.id, other.id);
+        eq([r.ok, r.game.playerIds.length], [true, 2]);
+      });
+      test("cannot join the same game twice", async function () {
+        await fresh(); const p = await makePlayer();
+        const g = await PB.storage.createGame(makeGameFields(), p.id); // p is already in it
+        const r = await PB.storage.joinGame(g.id, p.id);
+        eq([r.ok, r.reason], [false, "already"]);
+      });
+      test("leaving lowers the count by one", async function () {
+        await fresh(); const p = await makePlayer();
+        const g = await PB.storage.createGame(makeGameFields({ maxPlayers: "10" }), p.id);
+        const other = await makePlayer("Other");
+        await PB.storage.joinGame(g.id, other.id);
+        const r = await PB.storage.leaveGame(g.id, other.id);
+        eq([r.ok, r.deleted, r.game.playerIds.length], [true, false, 1]);
+      });
+      test("cannot leave a game you are not in", async function () {
+        await fresh(); const p = await makePlayer();
+        const g = await PB.storage.createGame(makeGameFields(), p.id);
+        const other = await makePlayer("Other");
+        const r = await PB.storage.leaveGame(g.id, other.id);
+        eq([r.ok, r.reason], [false, "not-joined"]);
+      });
+      test("a game can be filled up to exactly its maximum, never beyond", async function () {
+        await fresh(); const p = await makePlayer();
+        const g = await PB.storage.createGame(makeGameFields({ maxPlayers: "2" }), p.id); // p = 1/2
+        const other = await makePlayer("Other");
+        const r1 = await PB.storage.joinGame(g.id, other.id); // 2/2
+        const third = await makePlayer("Third");
+        const r2 = await PB.storage.joinGame(g.id, third.id); // should be refused
+        eq([r1.ok, r2.ok, r2.reason, r1.game.playerIds.length], [true, false, "full", 2]);
+      });
+      test("a spot opens up again after someone leaves a full game", async function () {
+        await fresh(); const p = await makePlayer();
+        const g = await PB.storage.createGame(makeGameFields({ maxPlayers: "2" }), p.id);
+        const other = await makePlayer("Other");
+        await PB.storage.joinGame(g.id, other.id); // full
+        const afterLeave = await PB.storage.leaveGame(g.id, other.id);
+        eq(PB.storage.isFull(afterLeave.game), false);
+      });
+      test("joining a game that does not exist is refused", async function () {
+        await fresh(); const p = await makePlayer();
+        const r = await PB.storage.joinGame("nope", p.id);
+        eq(r.reason, "not-found");
+      });
+      test("a game is deleted automatically once everyone has left it", async function () {
+        await fresh(); const p = await makePlayer();
+        const g = await PB.storage.createGame(makeGameFields(), p.id); // only the creator is in it
+        const r = await PB.storage.leaveGame(g.id, p.id);
+        await PB.storage.refreshGames();
+        eq([r.ok, r.deleted, r.game], [true, true, null]);
+        eq(PB.storage.getGame(g.id), null);
+      });
+      test("a game stays if the creator leaves but someone else is still in it", async function () {
+        await fresh(); const p = await makePlayer();
+        const g = await PB.storage.createGame(makeGameFields(), p.id);
+        const other = await makePlayer("Other");
+        await PB.storage.joinGame(g.id, other.id);
+        const r = await PB.storage.leaveGame(g.id, p.id);
+        await PB.storage.refreshGames();
+        eq([r.ok, r.deleted, !!PB.storage.getGame(g.id)], [true, false, true]);
+      });
+
+      group("Deleting a game (creator only)");
+      test("the creator can delete their own game, even with others still in it", async function () {
+        await fresh(); const p = await makePlayer();
+        const g = await PB.storage.createGame(makeGameFields(), p.id);
+        const other = await makePlayer("Other");
+        await PB.storage.joinGame(g.id, other.id);
+        const r = await PB.storage.deleteGame(g.id, p.id);
+        await PB.storage.refreshGames();
+        eq([r.ok, PB.storage.getGame(g.id)], [true, null]);
+      });
+      test("someone who is not the creator cannot delete the game", async function () {
+        await fresh(); const p = await makePlayer();
+        const g = await PB.storage.createGame(makeGameFields(), p.id);
+        const other = await makePlayer("Other");
+        const r = await PB.storage.deleteGame(g.id, other.id);
+        await PB.storage.refreshGames();
+        eq([r.ok, r.reason, !!PB.storage.getGame(g.id)], [false, "not-creator", true]);
+      });
+      test("deleting a game that no longer exists is refused", async function () {
+        await fresh(); const p = await makePlayer();
+        const r = await PB.storage.deleteGame("nope", p.id);
+        eq([r.ok, r.reason], [false, "not-found"]);
+      });
+
+      group("My Games (uses the cache built by refreshGames)");
+      test("a new game shows in both My Games sections", async function () {
+        await fresh(); const p = await makePlayer();
+        const g = await PB.storage.createGame(makeGameFields(), p.id);
+        await PB.storage.refreshGames();
         const mine = PB.storage.getMyGames(p.id, NOW);
         eq([mine.joining.map(function (x) { return x.id; }), mine.created.map(function (x) { return x.id; })], [[g.id], [g.id]]);
       });
-      test("joined games show under Games I'm Joining but not Created", function () {
-        fresh(); const p = me(); const g = PB.storage.getUpcomingGames(NOW)[0];
-        PB.storage.joinGame(g.id, p.id, NOW);
+      test("joined games show under Games I'm Joining but not Created", async function () {
+        await fresh(); const owner = await makePlayer("Owner"); const p = await makePlayer("Me");
+        const g = await PB.storage.createGame(makeGameFields(), owner.id);
+        await PB.storage.joinGame(g.id, p.id);
+        await PB.storage.refreshGames();
         const mine = PB.storage.getMyGames(p.id, NOW);
         eq([mine.joining.length, mine.created.length], [1, 0]);
       });
-      test("leaving removes a game from Games I'm Joining", function () {
-        fresh(); const p = me(); const g = PB.storage.getUpcomingGames(NOW)[0];
-        PB.storage.joinGame(g.id, p.id, NOW); PB.storage.leaveGame(g.id, p.id, NOW);
+      test("leaving removes a game from Games I'm Joining", async function () {
+        await fresh(); const owner = await makePlayer("Owner"); const p = await makePlayer("Me");
+        const g = await PB.storage.createGame(makeGameFields(), owner.id);
+        await PB.storage.joinGame(g.id, p.id);
+        await PB.storage.leaveGame(g.id, p.id);
+        await PB.storage.refreshGames();
         eq(PB.storage.getMyGames(p.id, NOW).joining.length, 0);
       });
-      test("the creator can leave their own game (it stays under Created)", function () {
-        fresh(); const p = me();
-        const g = PB.storage.createGame(make(), p.id);
-        PB.storage.leaveGame(g.id, p.id, NOW);
-        const mine = PB.storage.getMyGames(p.id, NOW);
-        eq([PB.storage.getGame(g.id).playerIds.length, mine.joining.length, mine.created.length], [0, 0, 1]);
-      });
-      test("past games do not appear in My Games", function () {
-        fresh(); const p = me(); const g = PB.storage.getUpcomingGames(NOW)[0];
-        PB.storage.joinGame(g.id, p.id, NOW);
-        const later = new Date(2026, 8, 24, 20, 0, 0);
-        eq(PB.storage.getMyGames(p.id, later).joining.length, 0);
+      test("a game in the past does not appear as upcoming", async function () {
+        await fresh(); const p = await makePlayer();
+        const g = await PB.storage.createGame(makeGameFields({ date: "2026-09-20", time: "08:00" }), p.id);
+        await PB.storage.refreshGames();
+        eq(PB.storage.getUpcomingGames(NOW).some(function (x) { return x.id === g.id; }), false);
       });
 
-      group("Saving and damaged data");
-      test("data is still there after 'refresh' (init again)", function () {
-        fresh(); const p = me();
-        const g = PB.storage.createGame(make(), p.id);
-        PB.storage.joinGame(PB.storage.getUpcomingGames(NOW)[0].id, p.id, NOW);
-        PB.storage.init(NOW);
-        eq([!!PB.storage.getGame(g.id), PB.storage.getProfile().id === p.id, PB.storage.getMyGames(p.id, NOW).joining.length], [true, true, 2]);
+      group("Saving, damaged data and network problems");
+      test("data is still there after refreshing again", async function () {
+        await fresh(); const p = await makePlayer();
+        const g = await PB.storage.createGame(makeGameFields(), p.id);
+        await PB.storage.refreshGames();
+        await PB.storage.refreshGames();
+        eq([!!PB.storage.getGame(g.id), PB.storage.getProfile().id === p.id], [true, true]);
       });
-      test("damaged games data is replaced with fresh sample games", function () {
-        fresh();
-        PB.storage._rawSet("games", "{{{ not json");
-        PB.storage.init(NOW);
-        eq([PB.storage.status.recovered, PB.storage.getGames().length], [true, 4]);
-      });
-      test("damaged profile data does not crash", function () {
-        fresh();
+      test("damaged profile data does not crash - it is treated as no profile", function () {
         PB.storage._rawSet("profile", "12345garbage");
         eq(PB.storage.getProfile(), null);
+        PB.storage.status.recovered = false;
       });
-      test("reset brings back the sample games and removes the profile", function () {
-        fresh(); const p = me(); PB.storage.createGame(make(), p.id);
-        PB.storage.resetAll(NOW);
-        eq([PB.storage.getProfile(), PB.storage.getGames().length], [null, 4]);
+      test("a network failure shows a friendly message, not a raw error", async function () {
+        await fresh();
+        PB.storage.useFetch(function () { return Promise.reject(new TypeError("Failed to fetch")); });
+        let message = "";
+        try { await PB.storage.refreshGames(); } catch (e) { message = e.message; }
+        PB.storage.useFetch(mockFetch);
+        eq(message.indexOf("reach the server") !== -1, true);
       });
 
-      group("Sample games switched off (empty start)");
-      test("with samples off, the app starts with no games", function () {
-        PB.config.SAMPLE_GAMES = false;
-        ["profile", "players", "games"].forEach(PB.storage._rawRemove);
-        PB.storage.init(NOW);
-        eq([PB.storage.getGames().length, PB.storage.getUpcomingGames(NOW).length], [0, 0]);
-      });
-      test("with samples off, no invented players are saved", function () {
-        PB.config.SAMPLE_GAMES = false;
-        ["profile", "players", "games"].forEach(PB.storage._rawRemove);
-        PB.storage.init(NOW);
-        eq(PB.storage.getPlayer("p-mk").firstName, "Player");
-      });
-      test("with samples off, leftover sample games are removed but real games are kept", function () {
-        PB.config.SAMPLE_GAMES = true;
-        fresh();
-        const p = PB.storage.saveProfile({ firstName: "Real", lastName: "Person", email: "r@brandeis.edu", skill: "Beginner", positions: [] });
-        const mine = PB.storage.createGame({ date: "2026-09-30", time: "17:00", location: "Gosman Courts", skill: "Beginner", maxPlayers: "6", description: "" }, p.id);
-        PB.config.SAMPLE_GAMES = false;
-        PB.storage.init(NOW);
-        const games = PB.storage.getGames();
-        eq([games.length, games[0].id === mine.id], [1, true]);
-      });
-      test("with samples off, a created game works as the very first game", function () {
-        PB.config.SAMPLE_GAMES = false;
-        ["profile", "players", "games"].forEach(PB.storage._rawRemove);
-        PB.storage.init(NOW);
-        const p = PB.storage.saveProfile({ firstName: "First", lastName: "Host", email: "f@brandeis.edu", skill: "Beginner", positions: [] });
-        const g = PB.storage.createGame({ date: "2026-09-30", time: "17:00", location: "Gosman Courts", skill: "Beginner", maxPlayers: "6", description: "" }, p.id);
-        eq([PB.storage.getUpcomingGames(NOW).length, g.playerIds.length], [1, 1]);
-      });
-      test("with samples off, reset gives an empty app again", function () {
-        PB.config.SAMPLE_GAMES = false;
-        PB.storage.resetAll(NOW);
-        eq([PB.storage.getProfile(), PB.storage.getGames().length], [null, 0]);
-      });
-      PB.config.SAMPLE_GAMES = true;
+      // ----- run everything, in order, then show the summary -----
+      async function run() {
+        const out = document.getElementById("results");
+        const results = [];
+        for (const g of groups) {
+          const h = document.createElement("h2");
+          h.textContent = g.name;
+          out.appendChild(h);
+          const list = document.createElement("ul");
+          out.appendChild(list);
+          for (const t of g.tests) {
+            let passed = true, detail = "";
+            try {
+              await t.fn();
+            } catch (e) {
+              passed = false;
+              detail = e.message;
+            }
+            results.push({ name: t.name, ok: passed });
+            const li = document.createElement("li");
+            li.className = passed ? "ok" : "bad";
+            li.textContent = t.name;
+            if (!passed) {
+              const d = document.createElement("div");
+              d.className = "detail";
+              d.textContent = detail;
+              li.appendChild(d);
+            }
+            list.appendChild(li);
+          }
+        }
 
-      // ----- summary -----
-      const failed = results.filter(function (r) { return !r.ok; });
-      const summary = document.getElementById("summary");
-      if (failed.length === 0) {
-        summary.textContent = "ALL TESTS PASSED (" + results.length + ")";
-        summary.className = "pass";
-      } else {
-        summary.textContent = failed.length + " of " + results.length + " tests FAILED";
-        summary.className = "fail";
+        const failed = results.filter(function (r) { return !r.ok; });
+        const summary = document.getElementById("summary");
+        if (failed.length === 0) {
+          summary.textContent = "ALL TESTS PASSED (" + results.length + ")";
+          summary.className = "pass";
+        } else {
+          summary.textContent = failed.length + " of " + results.length + " tests FAILED";
+          summary.className = "fail";
+        }
+        window.__testResults = { total: results.length, failed: failed.map(function (f) { return f.name; }) };
+
+        // Clean up the test storage.
+        PB.storage._rawRemove("profile");
       }
-      window.__testResults = { total: results.length, failed: failed.map(function (f) { return f.name; }) };
-
-      // Clean up the test storage.
-      ["profile", "players", "games"].forEach(PB.storage._rawRemove);
+      run();
     })();
   </script>
 </body>

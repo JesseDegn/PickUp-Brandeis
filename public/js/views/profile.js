@@ -74,11 +74,6 @@ PB.views = PB.views || {};
       '<div class="chip-group" id="positions-group">' + positionChips + "</div></fieldset>" +
       '<button type="submit" class="btn btn--primary">SAVE PROFILE</button>' +
       "</form>" +
-      '<section class="card reset" aria-labelledby="reset-title">' +
-      '<h2 id="reset-title">Demo tools</h2>' +
-      '<p class="muted">Clears your profile and games on this device and brings back the sample games.</p>' +
-      '<div id="reset-area"><button type="button" class="btn btn--outline" id="reset-start">RESET DEMO DATA</button></div>' +
-      "</section>" +
       "</div>";
 
     bind(container);
@@ -110,7 +105,7 @@ PB.views = PB.views || {};
       });
     });
 
-    form.addEventListener("submit", function (event) {
+    form.addEventListener("submit", async function (event) {
       event.preventDefault();
       const data = {
         firstName: form.firstName.value,
@@ -144,37 +139,22 @@ PB.views = PB.views || {};
       }
 
       data.height = heightCheck.normalized;
-      PB.storage.saveProfile(data);
-
-      const returnTo = PB.state.returnTo;
-      PB.state.returnTo = null;
-      if (returnTo) {
-        PB.ui.toast("Profile saved. You can join now!", "success");
-        PB.router.navigate(returnTo);
-      } else {
-        PB.ui.toast("Profile saved!", "success");
-        PB.router.refresh();
-      }
-    });
-
-    // Reset demo data: two steps, so it cannot be tapped by accident.
-    const area = container.querySelector("#reset-area");
-    area.addEventListener("click", function (event) {
-      const id = event.target.id;
-      if (id === "reset-start") {
-        area.innerHTML =
-          '<p role="alert"><strong>Really reset?</strong> This cannot be undone.</p>' +
-          '<div class="button-row"><button type="button" class="btn btn--danger" id="reset-yes">YES, RESET</button>' +
-          '<button type="button" class="btn btn--outline" id="reset-no">CANCEL</button></div>';
-        const yes = area.querySelector("#reset-yes");
-        if (yes) yes.focus();
-      } else if (id === "reset-no") {
-        PB.router.refresh();
-      } else if (id === "reset-yes") {
-        PB.storage.resetAll(PB.now());
+      const submitButton = form.querySelector('button[type="submit"]');
+      submitButton.disabled = true;
+      try {
+        await PB.storage.saveProfile(data);
+        const returnTo = PB.state.returnTo;
         PB.state.returnTo = null;
-        PB.ui.toast("Demo data reset.", "success");
-        PB.router.refresh();
+        if (returnTo) {
+          PB.ui.toast("Profile saved. You can join now!", "success");
+          PB.router.navigate(returnTo);
+        } else {
+          PB.ui.toast("Profile saved!", "success");
+          PB.router.refresh();
+        }
+      } catch (e) {
+        submitButton.disabled = false;
+        PB.ui.toast(e.message, "error");
       }
     });
   }

@@ -181,6 +181,7 @@ Legend: `[ ]` not started, `[x]` finished and tested.
   - Depends on: 4.1.
   - Done when: every field from the spec is visible and matches the Figma screen.
   - Test it yourself: open each sample game and check each field.
+  - **Superseded in Phase 12.1:** the optional description was replaced by a required game name, shown at the top of the card and the details screen instead. Kept here as a record of what was built and why it later changed.
 
 - [x] **4.3 Show the "GAME ON" banner**
   - Builds: when confirmed players reach the desired number, show "GAME ON — Enough players confirmed" (green, with a check icon, and in words).
@@ -259,6 +260,7 @@ Legend: `[ ]` not started, `[x]` finished and tested.
   - Depends on: 1.5, 2.1.
   - Done when: the form matches the design with visible labels.
   - Test it yourself: open the Create tab and compare to Figma.
+  - **Superseded in Phase 12.1:** the optional description field was removed and replaced with a required "Name" field, shown first (above Date). Kept here as a record of what was built and why it later changed.
 
 - [x] **6.2 Show a text box when "Other" is chosen**
   - Builds: choosing Other reveals a required "Location name" box.
@@ -273,6 +275,7 @@ Legend: `[ ]` not started, `[x]` finished and tested.
   - Depends on: 6.1, 2.3.
   - Done when: an empty form, a player count of 0 or 500, and a yesterday date are each rejected with a clear message.
   - Test it yourself: try each bad value one at a time.
+  - **Superseded in Phase 12.1:** the 140-character optional-description rule was replaced by a required game name, up to 40 characters, validated the same way (blank or too-long is rejected with a clear message).
 
 - [x] **6.4 Save the new game**
   - Builds: CREATE GAME saves the game with you as creator and as a confirmed player, shows "Game created!", and sends you to Home.
@@ -358,6 +361,7 @@ Legend: `[ ]` not started, `[x]` finished and tested.
   - Depends on: 8.2.
   - Done when: pressing it and confirming returns the app to its first-load state.
   - Test it yourself: use it and check the sample games return.
+  - **Superseded in Phase 12.2:** this button (by then relabeled "FORGET MY PROFILE") only ever cleared the local copy of a profile on one device - it never deleted anything from the shared database, and at your request it was removed outright since no one would miss the option to "delete their account" at this stage. Kept here as a record of what was built and why it later changed.
 
 ---
 
@@ -480,61 +484,100 @@ Goal: every student sees the same games, and the shared version starts completel
   - Done when: you and I agree on the final feature list for the shared version.
   - Test it yourself: read the list and confirm it matches what you want.
 
-- [ ] **11.2 Create the D1 database and tables**
+- [x] **11.2 Create the D1 database and tables**
   - Builds: tables for players, games, and joins, plus a setup script.
-  - Files: create `schema.sql`; modify `wrangler.jsonc`.
+  - Files: created `schema.sql`.
   - Depends on: 11.1.
-  - Done when: the tables exist in a local test database and accept sample rows.
-  - Test it yourself: run the query command I give you and see the sample games.
+  - Done when: the tables exist in a local test database and accept rows.
+  - Done: the real Cloudflare D1 database (`pickup-brandeis-db`) now exists on your account with all three tables, created after you approved the exact name — see `DEPLOY_ACCOUNTS.md` (Steps 1-2). It is not yet wired into the live site; that happens when you push the code (Step 3).
 
-- [ ] **11.3 Build the API (the server's list of requests it understands)**
-  - Builds: requests such as "list games," "create game," "join game," "leave game," and "save profile," with the rules enforced on the server (no double join, never over the maximum, past games hidden).
-  - Files: create `src/worker.js`; modify `wrangler.jsonc` (keep the static assets and `single-page-application` settings).
+- [x] **11.3 Build the API (the server's list of requests it understands)**
+  - Builds: requests such as "list games," "create game," "join game," "leave game," and "save profile," with the rules enforced on the server (no double join, never over the maximum). Also privacy: other students only ever receive a player's first name, last name, and id — never their email, height, or preferred positions.
+  - Files: created `src/worker.js`.
   - Depends on: 11.2.
   - Done when: tests show a double join is refused and the last spot can only go to one person.
-  - Test it yourself: run my test script and confirm every check passes.
+  - Test it yourself: open `public/tests.html` (should say ALL TESTS PASSED); the two-browser walk-through described under 11.4 also exercises every one of these requests against the real `src/worker.js` code.
 
-- [ ] **11.4 Point `storage.js` at the server**
-  - Builds: the same functions as before, now calling the API instead of localStorage (localStorage stays as a backup for the profile only).
-  - Files: modify `public/js/storage.js`.
+- [x] **11.4 Point `storage.js` at the server**
+  - Builds: the same functions as before, now calling the API instead of localStorage (localStorage stays as a backup for the profile only, on this device).
+  - Files: modified `public/js/storage.js`, `public/js/router.js`, `public/js/actions.js`, `public/js/app.js`, `public/js/views/create.js`, `public/js/views/profile.js`.
   - Depends on: 11.3.
   - Done when: two browsers see each other's new games and joins.
-  - Test it yourself: create a game in one browser window and see it in a second one.
+  - Test it yourself: once deployed, open the site in two different browsers (or a phone and a computer), create a game in one, and confirm it appears in the other after a moment.
 
 - [ ] **11.5 Refresh the list automatically**
-  - Builds: re-check for new games every 15 to 30 seconds and after every action, without disturbing what someone is typing.
-  - Files: modify `public/js/app.js`, view files.
+  - Builds: re-check for new games every 15 to 30 seconds, without anyone needing to reload.
+  - Files: would modify `public/js/router.js`.
   - Depends on: 11.4.
-  - Done when: a join in one window shows up in the other within about 30 seconds.
-  - Test it yourself: watch a count change in one window after joining in another.
+  - Done when: a join in one window shows up in the other within about 30 seconds without touching anything.
+  - Not built yet, on purpose: instead, the app re-checks the server every time you move to a new screen (Home, My Games, a game's details, Create) — see Build notes. For a class-sized group this keeps things simple and correct; a timer that quietly refreshes the screen you're already looking at can be added later if it turns out people want it.
 
-- [ ] **11.6 Handle slow or failed connections**
+- [x] **11.6 Handle slow or failed connections**
   - Builds: friendly messages when the network is down, and no lost data.
-  - Files: modify `public/js/storage.js`, view files.
+  - Files: modified `public/js/storage.js`, `public/js/router.js`, `public/js/actions.js`, `public/js/views/create.js`, `public/js/views/profile.js`.
   - Depends on: 11.4.
-  - Done when: turning off Wi-Fi shows a clear message instead of a broken screen.
-  - Test it yourself: turn off Wi-Fi and try to join a game.
+  - Done when: a broken connection shows a clear message instead of a broken screen.
+  - Test it yourself: `public/tests.html` includes a check for this; in the live app, a failed request shows a plain-English message and, on the main screens, a TRY AGAIN button, instead of a blank or frozen page.
 
 - [ ] **11.7 Clearly label the unverified-email limitation**
   - Builds: a visible note that this prototype does not confirm email ownership, and basic protections against spam (limit how many games one person can create per day).
-  - Files: modify `public/js/views/profile.js`, `src/worker.js`.
+  - Files: would modify `public/js/views/profile.js`, `src/worker.js`.
   - Depends on: 11.3.
-  - Done when: the note is visible and the daily limit works.
-  - Test it yourself: try to create more games than the limit.
+  - Not built yet. The Profile screen's existing subtitle ("Prototype sign-in: Brandeis email only") already carries the first half of this; a daily-creation limit is a reasonable follow-up once the shared version is live and you can see whether it's actually needed.
 
 - [ ] **11.8 Deploy and test with several phones**
   - Builds: deploy the server and database to Cloudflare and test with real people on real phones.
-  - Files: modify `wrangler.jsonc` as needed.
+  - Files: `wrangler.jsonc`, once the real database exists.
   - Depends on: 11.5, 11.6, 11.7.
-  - Done when: three phones all see and can join the same game and the counts agree.
-  - Test it yourself: try it with two friends.
+  - Not done yet — this is the next real-world step, once you approve creating the actual D1 database (see `DEPLOY_ACCOUNTS.md`) and push this code.
 
-- [ ] **11.9 Start the shared version empty (no fake games or fake players)**
-  - Builds: the shared database starts with zero games and zero players. The fictional sample games and sample players are removed from the shared version (they can stay in the single-device demo mode if you want them for classroom demos, controlled by one setting in `config.js`). Home shows its existing "No upcoming games yet" message and a Create button until a real student creates a game.
-  - Files: modify `public/js/config.js`, `public/js/storage.js`, `public/js/sampleData.js`, `src/worker.js`.
+- [x] **11.9 Start the shared version empty (no fake games or fake players)**
+  - Builds: the shared database starts with zero games and zero players, and there is no longer a way to switch on fake demo data — once the app is talking to a real shared database, invented games would be visible to everyone, not just you, so the on/off switch from Task 1.8 was removed rather than kept. Home shows its existing "No upcoming games yet" message and a Create button until a real student creates a game.
+  - Files: modified `public/js/config.js`, `public/js/storage.js`; removed `public/js/sampleData.js` and its "Sample games" tests.
   - Depends on: 11.4.
   - Done when: a brand-new database shows an empty Home screen with no invented names anywhere.
-  - Test it yourself: open the live site with a fresh database and confirm no sample games or players appear; then create one game and confirm it is the only one listed.
+  - Test it yourself: `public/tests.html` checks this directly; once deployed, opening the live site with a freshly created database should show an empty Home screen until someone creates the first real game.
+
+- [x] **11.10 A hidden admin dashboard (added at your request)**
+  - Builds: a screen only reachable by typing `#/admin` at the end of the web address (it is not a tab and nothing in the app links to it). It asks for a passcode that lives only on the server, not in the code, never in this Git repository. Once unlocked, it shows how many players, games, and joins exist in total, lists every game, and lets you remove any game (with a confirm step, the same two-step pattern used elsewhere in the app, such as the creator's DELETE GAME button added in Phase 12).
+  - Files: created `public/js/views/admin.js`; added admin requests to `src/worker.js` and `public/js/storage.js`; added a small amount of CSS.
+  - Depends on: 11.3.
+  - Done when: the wrong passcode is refused, the right one shows accurate numbers, and removing a game there makes it disappear for everyone.
+  - Test it yourself: a scripted browser walk-through (two people, one admin) confirmed all of this against the real server code (see Build notes). Once deployed, you will set the real passcode yourself in the Cloudflare dashboard — see `DEPLOY_ACCOUNTS.md`.
+
+---
+
+## Phase 12 — Four changes requested before the first real push
+
+Goal: four small changes you asked for while the real shared database was still empty, batched in before pushing so they land in the database structure from the start rather than needing a migration later (see `DEPLOY_ACCOUNTS.md` for why that distinction matters).
+
+- [x] **12.1 Replace the optional description with a required game name**
+  - Builds: the Create screen's optional, 140-character "Description" field is gone. In its place, a required "Name" field (up to 40 characters) is now the very first field on the form, above Date. The name is what shows on the game's card and at the top of Game Details, replacing the old hardcoded "Pickup Basketball" title.
+  - Files: modified `public/js/views/create.js`, `public/js/views/gameDetails.js`, `public/js/components/gameCard.js`, `public/js/validation.js`, `public/js/config.js`, `src/worker.js`, `schema.sql`.
+  - Depends on: 6.1, 6.3, 4.2, 11.3.
+  - Done when: creating a game without a name is refused with a clear message, a name over 40 characters is refused, and a saved name appears on the card and in Game Details.
+  - Test it yourself: `public/tests.html` covers this directly; the two-device walk-through (see Build notes) also creates and views a named game end to end against the real `src/worker.js`.
+
+- [x] **12.2 Remove the "Reset demo data" / "forget my profile" control**
+  - Builds: the entire "This device" section on the Profile screen - the button, its confirmation step, and the `resetAll` function it called - is removed outright. It only ever cleared one device's local copy of a profile, never anything on the shared server, and at this stage no one would miss the option to "delete their account."
+  - Files: modified `public/js/views/profile.js`, `public/js/storage.js`; removed the matching tests from `public/tests.html`.
+  - Depends on: 8.5.
+  - Done when: the Profile screen has no reset section at all, and no leftover code references it.
+  - Test it yourself: open Profile and confirm there is nothing below SAVE PROFILE; `public/tests.html` has no remaining reset-related checks.
+
+- [x] **12.3 Let a game's creator delete it**
+  - Builds: on Game Details, a creator-only "Creator tools" section with a DELETE GAME button, using the same two-step confirm pattern as the admin dashboard's REMOVE button ("Delete this game? This removes it for everyone and cannot be undone." / YES, DELETE / CANCEL). Deleting removes the game and all of its joins for every student, regardless of how many players are confirmed. Only the creator sees this section.
+  - Files: modified `public/js/views/gameDetails.js`, `public/js/storage.js`, `src/worker.js`.
+  - Depends on: 11.10 (the same delete pattern), 4.2.
+  - Done when: the creator can delete their own game from any number of confirmed players; a non-creator never sees the button and a direct attempt is refused by the server.
+  - Test it yourself: `public/tests.html` covers creator-only deletion (including a non-creator's attempt and deleting a game that no longer exists); the two-device walk-through also creates a second game, deletes it as the creator, and confirms it disappears from Home.
+
+- [x] **12.4 Delete a game automatically once everyone has left**
+  - Builds: leaving a game now checks the confirmed count afterward; if it reaches zero - whether the creator was the last to go or not - the game (and its now-empty join list) is deleted automatically, the same as a creator-initiated delete. The leave confirmation message says so when it happens ("You left the game. Since no one was left, it was removed.").
+  - Files: modified `src/worker.js`, `public/js/actions.js`.
+  - Depends on: 5.1, 12.3.
+  - Done when: the last remaining player leaving (creator or not) makes the game disappear for everyone; a game with other players still in it survives the creator leaving.
+  - Test it yourself: `public/tests.html` covers both cases directly; the two-device walk-through has the creator leave first (game survives) and then the last remaining player leave (game disappears for both devices).
 
 ---
 
@@ -547,7 +590,8 @@ Real email verification (a link sent to the student's inbox), notifications, mor
   - Files: modified `public/js/config.js`, `public/js/storage.js`; added 5 checks to `public/tests.html`.
   - Depends on: 3.1, 8.2.
   - Done when: with the setting off, Home shows "No upcoming games yet" and a Create button; creating a game makes it the only card; refreshing does not bring back samples.
-  - Test it yourself: open the self-check page (should say ALL TESTS PASSED, 78) and try the app: empty Home, create a game, refresh, confirm it's still the only one.
+  - Test it yourself: open the self-check page and try the app: empty Home, create a game, refresh, confirm it's still the only one.
+  - **Superseded in Phase 11.9:** once the app talks to a real shared database, an on/off switch for fake data would show invented games to every student, not just the person testing, so this switch (and the sample data it drew from) was removed rather than carried forward. Kept here as a record of what was built and why it later changed.
 
 ---
 
@@ -555,12 +599,17 @@ Real email verification (a link sent to the student's inbox), notifications, mor
 
 - **Batched delivery.** Phases 1 to 8 were built and tested together and committed as one batch, at your request, instead of one commit per task.
 - **Plain script files.** The app uses ordinary `<script>` files that share one object called `PB`, instead of JavaScript "modules". This lets you test by double-clicking `public/index.html` and avoids build tools.
-- **Self-check page.** `public/tests.html` runs 73 automated checks of the rules (email, height, player count, join/leave, full games, creator counts, saving, damaged data). Open it in a browser and look for "ALL TESTS PASSED". It uses its own storage, so it never touches your real data.
+- **Self-check page.** `public/tests.html` runs 75 automated checks of the rules (email, height, player count, join/leave, full games, creator counts, game names, creator-only deletion, auto-deletion at zero players, saving, damaged data). Open it in a browser and look for "ALL TESTS PASSED". It uses its own storage, so it never touches your real data.
 - **Extra browser testing.** A scripted browser also clicked through the whole app (Welcome, Profile, Home, Details, Join/Leave, Create, My Games, refresh, reset, empty states, keyboard use, blocked storage) with the clock fixed to Thursday, Sept 24, 2026 at noon. All checks passed.
 - **Deeper blue for text and buttons.** The Figma blue (#1E6FFF) measured 4.4:1 against white, just under the 4.5:1 target for readable small text. Text and button fills use #1A5FE6 (5.5:1) instead. It looks almost identical. The original blue is still used for large decoration.
 - **Tab icons.** The tab bar uses simple line icons instead of the emoji shown in Figma, so they look the same on every phone.
 - **Sample games stay fresh.** If every sample game has passed, new sample games are added, so the demo never looks empty for someone testing days later. Games you create are never touched.
 - **Phase 9 is partly done.** Labels, large buttons, keyboard use, focus outlines, contrast, and error messages were built in from the start. The formal review in tasks 9.1 to 9.6 (checking every screen at several phone sizes, a full accessibility pass, side-by-side with Figma) is still to do, so those boxes stay unticked.
+- **Refresh-on-navigation instead of a timer (Phase 11).** Rather than a background timer that re-checks the server every 15-30 seconds (the original 11.5 plan), every screen that shows games (Home, My Games, a game's details, Create) fetches the latest list right before it draws itself — the same instant you tap a tab or open a game. This is simpler to reason about, uses less battery and data, and for a class-sized group is just as fresh in practice: you always see accurate numbers when you look at a screen, just not while you're already staring at one and someone else joins in that exact moment. A quiet background timer can be added later without changing anything else if it turns out people want it.
+- **Same person, two devices.** When someone saves a profile with an email that's already registered (say, they used their phone earlier and now use a laptop), the server recognizes the email and reuses that same identity instead of creating a second, duplicate person. If a *different* person later uses that same device with a *different* email, their new profile is kept separate — the device never hands them someone else's saved identity.
+- **No enforcement of "already started" on the server.** The Create screen and Game Details screen already stop you from picking a past time or joining a game that has started, using the time your own device reports. The server does not double-check this, because a phone's clock and a server's clock can disagree by enough (time zones, a wrong clock) to make a server-side check unreliable and more likely to be wrong than helpful. This matches how the rest of the prototype favors the browser's own checks.
+- **Locally tested without Cloudflare's own tools.** This sandbox could not install Cloudflare's `wrangler` command-line tool (its download was blocked), so `src/worker.js` and the database rules in `schema.sql` were tested by running the exact same code in a stand-in copy built from Node.js's own built-in tools — a real SQL database and the same request/response objects a browser uses — and then driving the actual app through a scripted browser (two separate "devices" creating a profile, creating a named game, seeing each other's game, joining, leaving, the creator deleting a game they created, a game deleting itself once its last player leaves, and an admin removing a game) against that copy. 75 automated checks and this full walk-through (27 checks) all passed. The real Cloudflare deployment should still be tested once with a phone or two after it goes live, the same as Task 11.8 already called for.
+- **Admin page is intentionally unlisted.** There is no "Admin" button or tab anywhere in the app. It exists at the web address `#/admin` (for example, `https://your-site.workers.dev/#/admin`), and only works once you set a passcode on the server (see `DEPLOY_ACCOUNTS.md`). Anyone without that passcode who finds the page just sees "That passcode is not right."
 
 ## Git rules for the build
 

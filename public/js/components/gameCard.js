@@ -8,7 +8,7 @@ window.PB = window.PB || {};
 
   // A short phrase describing a game, for screen readers on buttons.
   function describe(game, now) {
-    return PB.format.formatWhen(game, now) + " at " + game.location;
+    return game.name + ", " + PB.format.formatWhen(game, now) + " at " + game.location;
   }
 
   // The big button. Its wording depends on whether the person is in the
@@ -42,7 +42,7 @@ window.PB = window.PB || {};
       '<article class="game-card" data-game-id="' + esc(game.id) + '">' +
       '<div class="game-card__top">' +
       '<h3 class="game-card__title"><a class="game-card__link" href="#/game/' + encodeURIComponent(game.id) + '">' +
-      "<span aria-hidden=\"true\">&#127936;</span> Pickup Basketball</a></h3>" +
+      '<span aria-hidden="true">&#127936;</span> ' + esc(game.name) + "</a></h3>" +
       '<span class="' + chipClass + '">' + esc(PB.format.shortSkill(game.skill)) + "</span>" +
       "</div>" +
       '<p class="game-card__when">' + esc(PB.format.formatWhen(game, ctx.now)) + "</p>" +

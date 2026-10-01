@@ -1,11 +1,22 @@
 // Pickup Brandeis - the ONE place that saves and loads data.
 //
 // Every screen asks this file for games and players, and tells it about
-// changes (join, leave, create). Nothing else in the app touches localStorage.
-// Later, shared online data can be added by changing only this file.
+// changes (join, leave, create). Nothing else in the app talks to the
+// network or to localStorage directly.
 //
-// "localStorage" is a small storage area inside each web browser. It keeps
-// data on that one device, even after the page is refreshed.
+// Two different places hold data now:
+//   1. The shared server (Cloudflare + a database) has every game and every
+//      player, for everyone. This file reaches it over the network using
+//      small web addresses ("/api/games", and so on).
+//   2. This one browser also remembers YOUR OWN profile in "localStorage"
+//      (a small storage area inside the browser), so you do not have to
+//      retype your name and email every time you open the app. Nothing
+//      else - no games, no other people's info - is kept on the device.
+//
+// Because the shared data lives on a server, most functions below now take
+// a moment (they "return a Promise") instead of finishing instantly. Screens
+// that need data call `await` and show a brief loading message while they
+// wait - see router.js.
 
 window.PB = window.PB || {};
 
@@ -18,7 +29,15 @@ window.PB = window.PB || {};
     recovered: false, // true when damaged saved data had to be reset
   };
 
-  // ----- raw reading and writing (with safe fallbacks) -----
+  // A cache of the last data we fetched from the server, so screens can read
+  // it instantly (no "await") once it has been loaded at least once.
+  const cache = {
+    games: [], // array of game objects, as sent by the server
+    players: {}, // id -> {id, firstName, lastName}, built from the games above
+    loaded: false,
+  };
+
+  // ----- raw reading and writing (with safe fallbacks) - profile only -----
 
   function rawGet(key) {
     if (status.usingMemory) return memory[prefix + key] === undefined ? null : memory[prefix + key];
@@ -69,105 +88,124 @@ window.PB = window.PB || {};
     rawSet(key, JSON.stringify(value));
   }
 
-  function isArray(v) {
-    return Array.isArray(v);
-  }
   function isObject(v) {
     return v !== null && typeof v === "object" && !Array.isArray(v);
   }
 
-  // ----- setup -----
+  // ----- talking to the server -----
 
-  // Call once when the app starts. Sets up saved data (and the sample players
-  // and games, only if PB.config.SAMPLE_GAMES is true).
-  function init(now) {
-    now = now || PB.now();
-    let players = read("players", null, isObject);
-    let games = read("games", null, isArray);
-
-    if (players === null) {
-      players = {};
-      if (PB.config.SAMPLE_GAMES) {
-        PB.sample.PEOPLE.forEach(function (p) {
-          players[p.id] = p;
-        });
-      }
-      // Keep the current user's name available if a profile exists.
-      const profile = read("profile", null, isObject);
-      if (profile && profile.id) {
-        players[profile.id] = { id: profile.id, firstName: profile.firstName, lastName: profile.lastName };
-      }
-      write("players", players);
-    }
-
-    if (!PB.config.SAMPLE_GAMES) {
-      // Sample games are switched off: start empty, and clear away any sample
-      // games this browser saved earlier. Games people created are kept.
-      games = (games || []).filter(function (g) {
-        return !g.sample;
-      });
-    } else if (games === null) {
-      games = PB.sample.makeGames(now);
-    } else {
-      // Keep the demo alive: if every sample game has passed, add fresh ones.
-      const anyUpcomingSample = games.some(function (g) {
-        return g.sample && PB.format.startOf(g).getTime() > now.getTime();
-      });
-      const hasSample = games.some(function (g) {
-        return g.sample;
-      });
-      if (hasSample && !anyUpcomingSample) {
-        games = games.filter(function (g) {
-          return !g.sample;
-        });
-        games = games.concat(PB.sample.makeGames(now));
-      }
-    }
-    write("games", games);
+  // A test page can replace this with a fake version that does not need a
+  // real network (see tests.html).
+  let fetchImpl = function () {
+    return window.fetch.apply(window, arguments);
+  };
+  function useFetch(fn) {
+    fetchImpl = fn;
   }
 
-  // ----- profile -----
+  // Friendly text for network problems, so the app never shows something
+  // like "TypeError: Failed to fetch" to a person.
+  const OFFLINE_MESSAGE = "Can't reach the server right now. Check your connection and try again.";
+
+  async function api(path, options) {
+    let response;
+    try {
+      response = await fetchImpl(path, options);
+    } catch (e) {
+      throw new Error(OFFLINE_MESSAGE);
+    }
+    let body = null;
+    try {
+      body = await response.json();
+    } catch (e) {
+      /* no JSON body */
+    }
+    if (!response.ok) {
+      throw new Error((body && body.error) || "Something went wrong. Please try again.");
+    }
+    return body;
+  }
+
+  function rebuildPlayerCache(games) {
+    const players = {};
+    games.forEach(function (g) {
+      (g.players || []).forEach(function (p) {
+        players[p.id] = p;
+      });
+      if (g.creator) players[g.creator.id] = g.creator;
+    });
+    // Always keep the signed-in person's own name available, even before
+    // they have created or joined any game.
+    const profile = getProfile();
+    if (profile) players[profile.id] = { id: profile.id, firstName: profile.firstName, lastName: profile.lastName };
+    cache.players = players;
+  }
+
+  // Fetches the latest games from the server and updates the local cache.
+  // Every screen calls this (via router.js) before it draws itself, so what
+  // people see is never more than a moment out of date.
+  async function refreshGames() {
+    const body = await api("/api/games");
+    cache.games = (body && body.games) || [];
+    rebuildPlayerCache(cache.games);
+    cache.loaded = true;
+    return cache.games;
+  }
+
+  // ----- setup -----
+
+  // Call once when the app starts.
+  async function init() {
+    await refreshGames();
+  }
+
+  // ----- profile (kept on this device only) -----
 
   function getProfile() {
     return read("profile", null, isObject);
   }
 
-  // Saves the profile (adds an id the first time) and remembers the name so
-  // it can show up in player lists.
-  function saveProfile(fields) {
+  // Saves the profile to the shared server (so other people can see your
+  // name on games), and remembers it on this device too.
+  async function saveProfile(fields) {
     const existing = getProfile();
-    const id = existing && existing.id ? existing.id : "u-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-    const profile = {
-      id: id,
+    const email = String(fields.email).trim().toLowerCase();
+    // Only reuse the id saved on this device if it is still the SAME email.
+    // Otherwise, if someone else sits down at this device and enters a
+    // different email, we must not accidentally hand them the previous
+    // person's identity - the server decides (by matching email) whether
+    // this is a returning person or someone brand new.
+    const sameEmail = existing && existing.email === email;
+    const payload = {
+      id: sameEmail ? existing.id : undefined,
       firstName: String(fields.firstName).trim(),
       lastName: String(fields.lastName).trim(),
-      email: String(fields.email).trim().toLowerCase(),
+      email: email,
       skill: fields.skill,
       height: fields.height || "",
       positions: fields.positions || [],
     };
+    const body = await api("/api/profile", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const profile = body.profile;
     write("profile", profile);
-    const players = read("players", {}, isObject);
-    players[id] = { id: id, firstName: profile.firstName, lastName: profile.lastName };
-    write("players", players);
+    cache.players[profile.id] = { id: profile.id, firstName: profile.firstName, lastName: profile.lastName };
     return profile;
   }
 
-  // ----- players -----
+  // ----- players (read from the cache built by refreshGames) -----
 
   function getPlayer(id) {
-    const players = read("players", {}, isObject);
-    return players[id] || { id: id, firstName: "Player", lastName: "" };
+    return cache.players[id] || { id: id, firstName: "Player", lastName: "" };
   }
 
-  // ----- games -----
+  // ----- games (read from the cache built by refreshGames) -----
 
   function getGames() {
-    return read("games", [], isArray);
-  }
-
-  function saveGames(games) {
-    write("games", games);
+    return cache.games;
   }
 
   function getGame(id) {
@@ -213,66 +251,67 @@ window.PB = window.PB || {};
     };
   }
 
-  // Adds a person to a game if the rules allow it.
-  // Returns { ok: true, game } or { ok: false, reason }.
-  function joinGame(gameId, userId, now) {
-    now = now || PB.now();
-    const games = getGames();
-    const game = games.find(function (g) {
-      return g.id === gameId;
+  // Adds a person to a game if the server's rules allow it.
+  // Returns { ok: true, game } or { ok: false, reason }. Note: this does NOT
+  // refresh the local cache itself - router.js always fetches the latest
+  // games right before it draws the next screen, so the counts shown are
+  // never stale, and we never fetch the list twice in a row.
+  async function joinGame(gameId, userId) {
+    return api("/api/games/" + encodeURIComponent(gameId) + "/join", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ playerId: userId }),
     });
-    if (!game) return { ok: false, reason: "not-found" };
-    if (hasStarted(game, now)) return { ok: false, reason: "started" };
-    if (isJoined(game, userId)) return { ok: false, reason: "already" };
-    if (isFull(game)) return { ok: false, reason: "full" };
-    game.playerIds.push(userId);
-    saveGames(games);
-    return { ok: true, game: game };
   }
 
-  // Removes a person from a game.
-  function leaveGame(gameId, userId, now) {
-    now = now || PB.now();
-    const games = getGames();
-    const game = games.find(function (g) {
-      return g.id === gameId;
+  // Removes a person from a game. See the note on joinGame above.
+  async function leaveGame(gameId, userId) {
+    return api("/api/games/" + encodeURIComponent(gameId) + "/leave", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ playerId: userId }),
     });
-    if (!game) return { ok: false, reason: "not-found" };
-    if (hasStarted(game, now)) return { ok: false, reason: "started" };
-    if (!isJoined(game, userId)) return { ok: false, reason: "not-joined" };
-    game.playerIds = game.playerIds.filter(function (id) {
-      return id !== userId;
-    });
-    saveGames(games);
-    return { ok: true, game: game };
   }
 
   // Creates a game. The creator is automatically counted as attending.
-  function createGame(fields, creatorId) {
-    const games = getGames();
-    const game = {
-      id: "g-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      sample: false,
-      sport: "basketball",
-      date: fields.date,
-      time: fields.time,
-      location: fields.location,
-      skill: fields.skill,
-      maxPlayers: Number(fields.maxPlayers),
-      description: String(fields.description || "").trim(),
-      creatorId: creatorId,
-      playerIds: [creatorId],
-    };
-    games.push(game);
-    saveGames(games);
-    return game;
+  async function createGame(fields, creatorId) {
+    const body = await api("/api/games", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: String(fields.name || "").trim(),
+        date: fields.date,
+        time: fields.time,
+        location: fields.location,
+        skill: fields.skill,
+        maxPlayers: Number(fields.maxPlayers),
+        creatorId: creatorId,
+      }),
+    });
+    return body.game;
   }
 
-  // Wipes everything and starts again with the sample data.
-  function resetAll(now) {
-    ["profile", "players", "games"].forEach(rawRemove);
-    status.recovered = false;
-    init(now);
+  // Deletes a game outright. Only the game's creator can do this (the
+  // server checks that creatorId matches who actually created it).
+  async function deleteGame(gameId, creatorId) {
+    return api("/api/games/" + encodeURIComponent(gameId) + "/delete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ creatorId: creatorId }),
+    });
+  }
+
+  // ----- admin (a passcode-protected view; see views/admin.js) -----
+
+  async function adminOverview(passcode) {
+    return api("/api/admin/overview", { headers: { "x-admin-passcode": passcode } });
+  }
+
+  async function adminDeleteGame(gameId, passcode) {
+    return api("/api/admin/games/" + encodeURIComponent(gameId), {
+      method: "DELETE",
+      headers: { "x-admin-passcode": passcode },
+    });
   }
 
   // Tests use a different set of storage names so real data is never touched.
@@ -294,11 +333,15 @@ window.PB = window.PB || {};
     joinGame: joinGame,
     leaveGame: leaveGame,
     createGame: createGame,
-    resetAll: resetAll,
+    deleteGame: deleteGame,
+    refreshGames: refreshGames,
+    adminOverview: adminOverview,
+    adminDeleteGame: adminDeleteGame,
     isFull: isFull,
     isJoined: isJoined,
     hasStarted: hasStarted,
     useNamespace: useNamespace,
+    useFetch: useFetch, // for tests only
     // For tests only: put raw text into a storage slot (e.g. damaged data).
     _rawSet: rawSet,
     _rawRemove: rawRemove,

@@ -27,9 +27,10 @@ A Brandeis student who wants to play casual basketball.
 4. Create a profile: first name, last name, Brandeis email, skill level, and optionally height and preferred positions.
 5. Return to the game and join it. The player count goes up by one and the student's initials appear.
 6. Open a game to see all its details and who is coming.
-7. Create a new game: date, time, location, skill level, number of players, optional note.
+7. Create a new game: name it, then set date, time, location, skill level, and number of players.
 8. Open **My Games** to see games they joined and games they created.
-9. Leave a game if plans change. The count goes down by one.
+9. Leave a game if plans change. The count goes down by one. If that was the last confirmed player, the game disappears for everyone.
+10. If they created a game, they can delete it at any time from Game Details, removing it for everyone.
 
 ## 4. Navigation
 
@@ -59,19 +60,19 @@ The Welcome screen is shown before the tab bar and has no tab bar.
 
 - Header: "Pickup Basketball at Brandeis" with the small label "PICKUP BRANDEIS" and a short subtitle.
 - A heading "Upcoming games" and a list of game cards, soonest first.
-- Each **game card** shows: 🏀 "Pickup Basketball"; date and time (for example "Today · 6:00 PM", "Tomorrow · 7:30 PM", "Saturday · 2:00 PM"); location; skill level chip; small circles with player initials; "X / Y players confirmed"; and one large button.
+- Each **game card** shows: 🏀 the game's name (chosen by its creator); date and time (for example "Today · 6:00 PM", "Tomorrow · 7:30 PM", "Saturday · 2:00 PM"); location; skill level chip; small circles with player initials; "X / Y players confirmed"; and one large button.
 - The button says **JOIN GAME**, **LEAVE GAME** (if the student already joined), or **FULL** (if the game is full and the student is not in it). The **FULL** button is disabled and also shows the word FULL, so the state does not rely on color alone.
 - Tapping the card (anywhere except the button) opens Game Details.
 - If there are no upcoming games, show a friendly message and a button that goes to Create.
-- Several fictional sample games are present the first time the app loads (see section 8).
 
 ### 5.2 Game Details
 
-Shows all of: date, start time, location, skill level, players needed, confirmed players ("X / Y"), who created the game, optional description, the list of confirmed players (initials and full name), and a Join or Leave button (or FULL).
+Shows all of: the game's name, date, start time, location, skill level, players needed, confirmed players ("X / Y"), who created the game, the list of confirmed players (initials and full name), and a Join or Leave button (or FULL).
 
 - When confirmed players equal players needed, show a banner: **"GAME ON — Enough players confirmed"**.
 - A back control returns to the previous screen.
 - The creator is shown in the player list and marked "Organizer".
+- If the viewer created the game, a **"Creator tools"** section with a **DELETE GAME** button is shown (not shown to anyone else). Deleting asks for confirmation ("Delete this game? This removes it for everyone and cannot be undone.") before removing the game for every student.
 
 ### 5.3 Create
 
@@ -79,13 +80,13 @@ Fields, all with visible labels:
 
 | Field | Type | Required |
 |---|---|---|
+| Name | short text, up to 40 characters (shown above Date, the first field) | Yes |
 | Date | date picker | Yes |
 | Start time | time picker | Yes |
 | Location | dropdown: Gosman Courts, Outdoor Basketball Courts, Other | Yes |
 | Other location name | text box, appears only if "Other" is chosen | Yes, if "Other" |
 | Skill level | choice: Beginner, Intermediate, Advanced, All skill levels | Yes |
 | Desired number of players | number | Yes |
-| Description | short text, up to 140 characters | No |
 
 Button: **CREATE GAME**.
 
@@ -136,9 +137,11 @@ Games
 - [ ] Join a game and leave a game.
 - [ ] See the confirmed count update immediately.
 - [ ] See player initials on cards and full list in details.
-- [ ] Create a game; it appears right away on Home and My Games.
+- [ ] Create a game, naming it; it appears right away on Home and My Games.
 - [ ] See games I joined and games I created.
 - [ ] "GAME ON" message when a game reaches its desired number.
+- [ ] As a creator, delete a game I created.
+- [ ] A game with zero confirmed players disappears automatically.
 
 Quality
 - [ ] Data survives a browser refresh.
@@ -151,21 +154,29 @@ Quality
 2. Leaving a game decreases the confirmed count by one.
 3. A game can never have more confirmed players than its maximum.
 4. A full game shows **FULL** instead of JOIN GAME.
-5. The creator of a game automatically counts as attending. The creator can leave their own game; if they do, the game stays listed (the description says who created it), and the count goes down by one.
-6. Games whose start time has passed do not appear in upcoming lists (Home or My Games).
-7. Required fields cannot be blank. Whitespace-only text counts as blank.
-8. Desired number of players must be a whole number from **2 to 20**.
-9. Date and start time must be in the future when creating a game.
-10. Email must end in `@brandeis.edu` (not case-sensitive, and extra spaces around it are ignored).
-11. Height, if entered, must look like feet and inches between 4'0" and 7'6" (accepted styles: `6'1"`, `6' 1`, `6-1`, `6ft 1in`). Otherwise show a clear error.
-12. Joining or creating a game requires a saved profile.
-13. The app updates the screen after every action. The user never has to refresh.
-14. Only basketball exists.
-15. Sample players are fictional. Sample games fill in when the app first loads and are generated relative to the current day, so "Today" and "Tomorrow" are always correct. If every sample game has already passed (for example, a tester returns days later), fresh sample games are added so the demo never looks empty. Games a person created are never removed.
+5. The creator of a game automatically counts as attending. The creator can leave their own game; if they do, and at least one other player is still confirmed, the game stays listed (the player list still shows who created it).
+6. If a game's confirmed count reaches zero - everyone has left, including the creator if they were the last one to go - the game is deleted automatically for everyone.
+7. A game's creator can also delete it outright at any time, with a confirmation step, regardless of how many players are confirmed. This removes it for everyone and cannot be undone.
+8. Games whose start time has passed do not appear in upcoming lists (Home or My Games).
+9. Required fields cannot be blank. Whitespace-only text counts as blank.
+10. A game's name can be up to 40 characters.
+11. Desired number of players must be a whole number from **2 to 20**.
+12. Date and start time must be in the future when creating a game.
+13. Email must end in `@brandeis.edu` (not case-sensitive, and extra spaces around it are ignored).
+14. Height, if entered, must look like feet and inches between 4'0" and 7'6" (accepted styles: `6'1"`, `6' 1`, `6-1`, `6ft 1in`). Otherwise show a clear error.
+15. Joining or creating a game requires a saved profile.
+16. The app updates the screen after every action. The user never has to refresh.
+17. Only basketball exists.
+18. The app starts with zero games and zero players. The first game anyone sees is a real one, created by a real student. (Earlier drafts of this prototype showed fictional sample games on first load, before a shared database existed; see the "Build notes" in `FEATUREROADMAP_workplan.md`.)
+19. Every game and profile is stored on a shared server, not in one person's browser - see section 10. Other students can only ever see a player's first name and last name next to a game, never their email, height, or preferred positions.
+20. A hidden admin dashboard (reachable only by typing `#/admin`, with no link to it anywhere in the app) can view totals and remove any game, protected by a passcode known only to the site's operator - see section 10.
+21. There is no way to delete a profile or "sign out" in this prototype - a Brandeis email is all that identifies a student, so there is nothing sensitive stored on a device to clear.
 
-## 8. Sample data (first load)
+## 8. Sample data (single-device prototype only - not part of the live app)
 
-Fictional names only. Example games:
+This section documents the fictional demo data used **before** the shared database existed, for historical reference. It is no longer part of the app.
+
+Fictional names only. Example games that used to appear:
 
 | When | Location | Skill | Confirmed |
 |---|---|---|---|
@@ -175,8 +186,6 @@ Fictional names only. Example games:
 | Sunday · 4:00 PM | Gosman Courts | Beginner | 10 / 10 (shows GAME ON and FULL) |
 
 Fictional players (initials shown as circles): for example Maya Klein (MK), Jordan Reyes (JR), Alex Lin (AL), Dana Park (DP), Tyler Stone (TS), Noor Bakr (NB), Chris Wu (CW), Ellis Hart (EH), Riley Grant (RG), Sam Moreno (SM), Kai Ortiz (KO), Leo Brandt (LB), Finn Tate (FT), Hana Voss (HV), Omar Yusuf (OY).
-
-If a sample game's time has passed (for example, the app is opened late in the evening), it is hidden and no fake "past" games are shown.
 
 ## 9. Accessibility and usability requirements
 
@@ -189,21 +198,29 @@ If a sample game's time has passed (for example, the app is opened late in the e
 - A confirmation message appears after a game is created and after a profile is saved.
 - Empty sections explain what to do next.
 
-## 10. Data (what the app remembers)
+## 10. Data (what the app remembers, and where)
 
-Stored in the browser's localStorage:
+**On the shared server (Cloudflare D1, a SQL database) - visible to everyone:**
 
-- **Profile:** id, first name, last name, email, skill level, height (optional), positions (list, optional).
-- **Games:** id, sport ("basketball"), date, start time, location, skill level, maximum players, description, creator's id, list of confirmed player ids.
-- **Players (sample and current user):** id, name, initials.
+- **Players:** id, first name, last name, email, skill level, height (optional), positions (list, optional).
+- **Games:** id, sport ("basketball"), name, date, start time, location, skill level, maximum players, creator's id.
+- **Game_players:** which players have joined which games.
 
-All reading and writing goes through one file (`storage.js`) so it can be swapped for a shared online database later.
+**On this device only (localStorage) - private to this browser:**
+
+- **Profile:** a copy of your own saved profile (same fields as above), remembered so you don't have to retype it. This is a convenience copy, not the source of truth - the server's copy is what everyone (including other devices you use) actually sees.
+
+**Privacy rule:** other students only ever receive a player's **id, first name, and last name** - never their email, height, or preferred positions. There is no way to look up a player's full profile except your own. The server enforces this; it is not just a matter of the app's screens not showing it.
+
+**Admin dashboard:** a passcode-protected view (see section 7, rule 17) that shows total counts (players, games, joins) and every game's basic details (not players' private fields), and can delete a game. The passcode lives only in the server's own settings (a Cloudflare "secret"), never in this code, and is set directly by whoever runs the deployment.
+
+All reading and writing from the browser goes through one file (`storage.js`), which talks to the server through a small set of web addresses (`/api/...`) implemented in `src/worker.js` - the only code that touches the database directly.
 
 ## 11. Deliberately out of scope
 
 Other sports (soccer, volleyball, tennis, pickleball, etc.), payments, ratings, player rankings, competitive statistics, teams or leagues, direct messaging, group chats, friends or followers, real Brandeis single sign-on, complex authentication, push notifications, native iOS or Android apps, court reservations, AI recommendations, ads, and monetization.
 
-Also out of scope for this version: accounts with passwords, real-time updates between different students' devices, and email verification. These can be considered after testing whether students find value in the idea.
+Also out of scope for this version: accounts with passwords, real-time (instant, no-refresh) updates between different students' devices - the app checks for new data each time you move to a screen, not continuously (see `FEATUREROADMAP_workplan.md`) - and email verification. These can be considered after testing whether students find value in the idea.
 
 ## 12. What "done" means
 
@@ -226,6 +243,8 @@ And the app is deployed to a public Cloudflare address using the Workers Free pl
 
 ## 13. Known limitations (to be stated honestly to testers)
 
-- Games are stored per browser and are **not** shared between devices.
-- The email check is only a domain check, not real verification.
+- The email check is only a domain check, not real verification - anyone could type a Brandeis email that isn't theirs.
+- New data appears when you open or return to a screen, not instantly while you're looking at it.
 - It is a website, not an App Store app.
+- If two people somehow save a profile with the exact same id from two different, brand-new devices at the same moment, the second save wins (extremely unlikely in practice, and each device generates its own random id).
+- There is no daily limit yet on how many games one person can create, so nothing currently stops spam beyond the admin dashboard's manual Remove button.
