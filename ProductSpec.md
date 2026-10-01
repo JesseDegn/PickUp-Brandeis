@@ -170,6 +170,7 @@ Quality
 18. The app starts with zero games and zero players. The first game anyone sees is a real one, created by a real student. (Earlier drafts of this prototype showed fictional sample games on first load, before a shared database existed; see the "Build notes" in `FEATUREROADMAP_workplan.md`.)
 19. Every game and profile is stored on a shared server, not in one person's browser - see section 10. Other students can only ever see a player's first name and last name next to a game, never their email, height, or preferred positions.
 20. A hidden admin dashboard (reachable only by typing `#/admin`, with no link to it anywhere in the app) can view totals and remove any game, protected by a passcode known only to the site's operator - see section 10.
+21. A second hidden, read-only founder dashboard (`#/founder`, same passcode) shows a handful of usage signals computed live from the real data - see section 10 and `DASHBOARD_SPEC.md` for exactly what each one means and what it does not tell you. It cannot change or delete anything.
 21. There is no way to delete a profile or "sign out" in this prototype - a Brandeis email is all that identifies a student, so there is nothing sensitive stored on a device to clear.
 
 ## 8. Sample data (single-device prototype only - not part of the live app)
@@ -212,7 +213,9 @@ Fictional players (initials shown as circles): for example Maya Klein (MK), Jord
 
 **Privacy rule:** other students only ever receive a player's **id, first name, and last name** - never their email, height, or preferred positions. There is no way to look up a player's full profile except your own. The server enforces this; it is not just a matter of the app's screens not showing it.
 
-**Admin dashboard:** a passcode-protected view (see section 7, rule 17) that shows total counts (players, games, joins) and every game's basic details (not players' private fields), and can delete a game. The passcode lives only in the server's own settings (a Cloudflare "secret"), never in this code, and is set directly by whoever runs the deployment.
+**Admin dashboard:** a passcode-protected view (see section 7, rule 20) that shows total counts (players, games, joins) and every game's basic details (not players' private fields), and can delete a game. The passcode lives only in the server's own settings (a Cloudflare "secret"), never in this code, and is set directly by whoever runs the deployment.
+
+**Founder dashboard:** a second passcode-protected view (same passcode, see section 7, rule 21) that shows a handful of usage signals - reach, game fill rate, repeat use, and where activity concentrates - computed live from the same tables, plus an honest note on what it cannot show (see `DASHBOARD_SPEC.md`). It is read-only: it cannot edit, delete, or message anyone.
 
 All reading and writing from the browser goes through one file (`storage.js`), which talks to the server through a small set of web addresses (`/api/...`) implemented in `src/worker.js` - the only code that touches the database directly.
 

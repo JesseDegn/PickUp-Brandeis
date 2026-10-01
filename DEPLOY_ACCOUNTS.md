@@ -113,6 +113,11 @@ dashboard by you:
   end — there is no button for this anywhere in the app on purpose). Enter
   the passcode from Step 4. You should see counts of players, games, and
   joins, and a list of every game with a Remove button.
+- Go to `https://<your-site>.workers.dev/#/founder` (same passcode as
+  `#/admin`) to see the founder usage dashboard — reach, game fill rate,
+  repeat use, and where games get created, computed live from the real
+  database. See `DASHBOARD_SPEC.md` for what each number means. It's
+  read-only, so there's nothing there to break.
 
 ## If something needs to be undone
 

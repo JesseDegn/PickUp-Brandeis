@@ -2,7 +2,7 @@
 
 **Pickup Brandeis** is a simple web app that helps Brandeis students find, create, and join pickup basketball games, so they no longer have to dig through group chats, texts, or word of mouth.
 
-> Status: **working prototype, shared database built and locally tested.** The main screens and features are built and tested (Phases 1-8), deployed to Cloudflare (Phase 10), and the shared-database version with an admin dashboard (Phase 11) has been built and tested locally. The real, live shared database has been created on your Cloudflare account and connected in `wrangler.jsonc`; pushing this code to GitHub is the next step - see [`DEPLOY_ACCOUNTS.md`](DEPLOY_ACCOUNTS.md).
+> Status: **working prototype, shared database built and locally tested.** The main screens and features are built and tested (Phases 1-8), deployed to Cloudflare (Phase 10), the shared-database version with an admin dashboard (Phase 11) has been built and tested locally, four follow-up changes (Phase 12) are in, and a read-only founder usage dashboard (Phase 13) has been added. The real, live shared database has been created on your Cloudflare account and connected in `wrangler.jsonc`; pushing this code to GitHub is the next step - see [`DEPLOY_ACCOUNTS.md`](DEPLOY_ACCOUNTS.md).
 
 ---
 
@@ -38,6 +38,8 @@ Full details are in [`ProductSpec.md`](ProductSpec.md). The step-by-step build p
 Every student's games and joins are stored in one shared database (Cloudflare D1 - see the technology table below), not in each person's browser. This device still remembers *your own* profile (name, email, skill, height, positions) locally, so you don't have to retype it every time, but it is sent to the server so other students can see your name next to games you've joined or created. Other students only ever see your **first name, last name**, and whether you're in a game - never your email, height, or preferred positions.
 
 There is also a hidden **admin dashboard**, reachable only by typing `#/admin` at the end of the web address (there is no button for it anywhere in the app). It is protected by a passcode that is set directly on the server and never appears in this code or repository. It shows how many players, games, and joins exist, lists every game, and lets an admin remove one. See [`DEPLOY_ACCOUNTS.md`](DEPLOY_ACCOUNTS.md) for how to set the passcode.
+
+There's also a hidden **founder dashboard** at `#/founder` (same passcode), built for the BUS131 Week 5 dashboard assignment. It's read-only and shows a handful of live usage signals - reach, game fill rate, repeat use, and where games get created - computed fresh from the real database every time you open it, with no made-up numbers. See [`DASHBOARD_SPEC.md`](DASHBOARD_SPEC.md) for exactly what each signal means and what it can't tell you, and [`DASHBOARD_WORKPLAN.md`](DASHBOARD_WORKPLAN.md) for what's built and how it was tested.
 
 ## Important limitations of this first version
 
@@ -120,6 +122,8 @@ brandeis-pickup/
 ├── ProductSpec.md
 ├── FEATUREROADMAP_workplan.md
 ├── DEPLOY_ACCOUNTS.md      <- one-time setup: the shared database and admin passcode
+├── DASHBOARD_SPEC.md       <- founder dashboard: what each signal means, sources, blind spots
+├── DASHBOARD_WORKPLAN.md   <- founder dashboard: what's built, how to test it
 ├── schema.sql              <- the shared database's tables (run once, when it's created)
 ├── wrangler.jsonc
 ├── .gitignore
@@ -141,12 +145,12 @@ brandeis-pickup/
         ├── ui.js           <- small helpers (safe text, pop-up messages)
         ├── components/     <- reusable pieces (game card, avatars, tab bar, header)
         └── views/          <- one file per screen (welcome, home, game details,
-                               create, my games, profile, admin)
+                               create, my games, profile, admin, founder)
 ```
 
 ## Testing
 
-Open `public/tests.html` in a browser. It runs the app's rules through dozens of checks (valid and invalid emails, heights, player counts, joining, leaving, full games, saving, damaged data, and talking to the shared database) and shows **ALL TESTS PASSED** or lists what failed. It talks to a pretend, in-page copy of the server, so it never touches real students' data. Because this sandbox could not install Cloudflare's own `wrangler` tool, `src/worker.js` and `schema.sql` were separately checked by running the exact same code against a real SQL database and a scripted browser acting as two different students plus an admin - see the Build notes in `FEATUREROADMAP_workplan.md` for details.
+Open `public/tests.html` in a browser. It runs the app's rules through dozens of checks (valid and invalid emails, heights, player counts, joining, leaving, full games, saving, damaged data, and talking to the shared database) and shows **ALL TESTS PASSED** or lists what failed. It talks to a pretend, in-page copy of the server, so it never touches real students' data. Because this sandbox could not install Cloudflare's own `wrangler` tool, `src/worker.js` and `schema.sql` were separately checked by running the exact same code against a real SQL database and a scripted browser acting as two different students plus an admin - see the Build notes in `FEATUREROADMAP_workplan.md` for details. The founder dashboard's math (reach, fill rate, repeat use) was additionally checked against a hand-built fixture with known expected numbers, run directly against `src/worker.js` - see `DASHBOARD_WORKPLAN.md`.
 
 ## Not in this version
 

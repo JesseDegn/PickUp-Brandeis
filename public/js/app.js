@@ -23,6 +23,8 @@ window.PB = window.PB || {};
       { name: "game", pattern: /^#\/game\/([^/]+)$/, tab: "home", title: "Game Details", view: PB.views.gameDetails },
       // Hidden on purpose: not linked from anywhere in the app. See views/admin.js.
       { name: "admin", pattern: /^#\/admin$/, tab: null, title: "Admin", view: PB.views.admin },
+      // Hidden on purpose, same as Admin. See views/founder.js.
+      { name: "founder", pattern: /^#\/founder$/, tab: null, title: "Founder Dashboard", view: PB.views.founder },
     ],
     { screen: screenBox, tabBar: tabBarBox }
   );

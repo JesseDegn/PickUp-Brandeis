@@ -324,6 +324,83 @@ a {
   font-weight: 700;
 }
 
+/* ---------- Founder dashboard ---------- */
+
+.evidence-card {
+  gap: var(--space-1);
+}
+.evidence-card--gap {
+  background: var(--gray);
+}
+.evidence-card__value {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--blue-strong);
+  font-variant-numeric: proportional-nums;
+}
+.evidence-card__label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--navy);
+}
+.evidence-card__def {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.evidence-card__meta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.funnel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.funnel-step__top,
+.breakdown-row__top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--navy);
+  margin-bottom: 4px;
+}
+.funnel-step__count {
+  font-variant-numeric: tabular-nums;
+}
+.funnel-step__bar,
+.breakdown-row__bar {
+  height: 10px;
+  border-radius: var(--radius-pill);
+  background: var(--gray);
+  overflow: hidden;
+}
+.funnel-step__fill,
+.breakdown-row__fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--blue-strong);
+}
+
+.breakdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.feedback-entry {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--gray-line);
+}
+.feedback-entry:first-of-type {
+  padding-top: 0;
+  border-top: none;
+}
+.feedback-entry__date {
+  font-size: 12px;
+}
+
 .avatar-row {
   display: inline-flex;
 }

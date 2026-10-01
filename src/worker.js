@@ -411,6 +411,57 @@ async function handleAdminDeleteGame(env, request, gameId) {
   return fail(404, "That game could not be found.");
 }
 
+// ----- founder dashboard (read-only; same passcode as the admin dashboard) -----
+//
+// Every number here is computed fresh from the live tables on every request -
+// nothing is tracked or stored separately, and nothing here can write to the
+// database. See DASHBOARD_SPEC.md for what each signal means, its exact
+// definition, and what it does NOT tell you.
+
+async function handleFounderOverview(env, request) {
+  const denied = checkAdmin(env, request);
+  if (denied) return denied;
+
+  const totalPlayers = await env.DB.prepare("SELECT COUNT(*) AS n FROM players").first();
+  const engagedPlayers = await env.DB.prepare("SELECT COUNT(DISTINCT player_id) AS n FROM game_players").first();
+
+  const totalGames = await env.DB.prepare("SELECT COUNT(*) AS n FROM games").first();
+  const fullGames = await env.DB
+    .prepare(
+      `SELECT COUNT(*) AS n FROM games g
+       WHERE (SELECT COUNT(*) FROM game_players gp WHERE gp.game_id = g.id) >= g.max_players`
+    )
+    .first();
+
+  const repeatPlayers = await env.DB
+    .prepare(
+      `SELECT COUNT(*) AS n FROM (
+         SELECT player_id FROM game_players
+         GROUP BY player_id
+         HAVING COUNT(DISTINCT date(joined_at)) >= 2
+       )`
+    )
+    .first();
+
+  const byLocation = await env.DB
+    .prepare("SELECT location, COUNT(*) AS n FROM games GROUP BY location ORDER BY n DESC")
+    .all();
+  const bySkill = await env.DB
+    .prepare("SELECT skill, COUNT(*) AS n FROM games GROUP BY skill ORDER BY n DESC")
+    .all();
+
+  return json({
+    generatedAt: new Date().toISOString(),
+    reach: { totalPlayers: totalPlayers.n, engagedPlayers: engagedPlayers.n },
+    fillRate: { totalGames: totalGames.n, fullGames: fullGames.n },
+    repeatUse: { engagedPlayers: engagedPlayers.n, repeatPlayers: repeatPlayers.n },
+    breakdown: {
+      byLocation: byLocation.results.map((r) => ({ location: r.location, count: r.n })),
+      bySkill: bySkill.results.map((r) => ({ skill: r.skill, count: r.n })),
+    },
+  });
+}
+
 // ----- routing -----
 
 export default {
@@ -437,6 +488,8 @@ export default {
 
       m = path.match(/^\/api\/admin\/games\/([^/]+)$/);
       if (m && method === "DELETE") return await handleAdminDeleteGame(env, request, decodeURIComponent(m[1]));
+
+      if (path === "/api/admin/founder" && method === "GET") return await handleFounderOverview(env, request);
 
       // Any other /api/* address: nothing matched.
       return fail(404, "Unknown API address.");

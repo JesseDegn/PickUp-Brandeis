@@ -314,6 +314,11 @@ window.PB = window.PB || {};
     });
   }
 
+  // Read-only founder/usage dashboard; same passcode, no writes. See views/founder.js.
+  async function founderOverview(passcode) {
+    return api("/api/admin/founder", { headers: { "x-admin-passcode": passcode } });
+  }
+
   // Tests use a different set of storage names so real data is never touched.
   function useNamespace(newPrefix) {
     prefix = newPrefix;
@@ -337,6 +342,7 @@ window.PB = window.PB || {};
     refreshGames: refreshGames,
     adminOverview: adminOverview,
     adminDeleteGame: adminDeleteGame,
+    founderOverview: founderOverview,
     isFull: isFull,
     isJoined: isJoined,
     hasStarted: hasStarted,

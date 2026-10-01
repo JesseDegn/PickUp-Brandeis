@@ -581,6 +581,32 @@ Goal: four small changes you asked for while the real shared database was still 
 
 ---
 
+## Phase 13 — Founder usage dashboard (BUS131 Week 5 assignment)
+
+Goal: a small, read-only, live dashboard that answers specific founder questions from real usage - not a generic analytics platform. Built by following an approval gate before writing any code: the app and user were confirmed, three founder questions were asked and answered (success = repeat use; next decision = whether to expand past basketball; open worry = trust/no-shows), and the resulting scope (four signals, live data, no synthetic numbers, read-only, same passcode as `#/admin`) was proposed and explicitly approved before anything was built. See `DASHBOARD_SPEC.md` for the full detail behind every item below.
+
+- [x] **13.1 Read-only founder API endpoint**
+  - Builds: `GET /api/admin/founder`, protected by the same passcode check as the admin endpoints. Computes four signals fresh from the live tables on every request: reach (signed up vs. currently in a game), game fill rate, repeat use (joined on two or more different days), and a location/skill breakdown. Adds zero new database writes, columns, or stored events.
+  - Files: modified `src/worker.js`.
+  - Depends on: 11.3, 11.10.
+  - Done when: the right passcode returns correct numbers and the wrong (or missing) passcode is refused with no data in the response.
+  - Test it yourself: `test_founder_signals.mjs` (a hand-seeded fixture with known expected numbers, run directly against the real `src/worker.js` - kept outside this repo for the same `wrangler`-sandbox reason as `devserver.mjs`; see Build notes) - 17 checks, all passing, including that a deleted game drops out of the fill-rate count entirely.
+
+- [x] **13.2 The Founder Dashboard screen**
+  - Builds: a new hidden screen at `#/founder` (same passcode gate pattern as `#/admin`), showing four evidence cards (each with its number, a plain-language definition, its source, and its blind spots), a 3-step "user journey" funnel, a location/skill breakdown, and a manually-edited "Feedback & next experiment" panel for logging real conversations with users by hand.
+  - Files: created `public/js/views/founder.js`; modified `public/js/storage.js`, `public/js/app.js`, `public/index.html`, `public/css/styles.css`.
+  - Depends on: 13.1.
+  - Done when: the dashboard reads honestly at every data level - real numbers when there's data, and "No data yet" (never 0% or a blank) when there isn't.
+  - Test it yourself: the two-device walk-through (see Build notes) checks this screen twice - once before anyone has signed up (expects "No data yet" everywhere) and once after real actions have happened (expects specific numbers matching the walk-through's known state) - 8 checks. Also screenshotted at phone and desktop widths; this caught and fixed a real issue (a true-zero funnel step was showing a small sliver instead of an empty bar, misleadingly suggesting something had happened).
+
+- [ ] **13.3 Trust / no-shows signal**
+  - Builds: would require keeping a record when someone leaves a game (e.g. a `left_at` column) instead of deleting the row outright, so leave-timing-relative-to-start-time becomes measurable.
+  - Files: would modify `schema.sql`, `src/worker.js`.
+  - Depends on: 13.1.
+  - Not built. This changes how the live app writes data, not just a read-only addition, so per this project's rule of separate explicit approval for anything touching the real database, it was deliberately left out of this version. The dashboard says so plainly rather than faking the number. See `DASHBOARD_SPEC.md`, "Not built: trust / no-shows."
+
+---
+
 ## Later ideas (not in this version)
 
 Real email verification (a link sent to the student's inbox), notifications, more sports. Nothing here will be built until you decide to.
@@ -608,7 +634,7 @@ Real email verification (a link sent to the student's inbox), notifications, mor
 - **Refresh-on-navigation instead of a timer (Phase 11).** Rather than a background timer that re-checks the server every 15-30 seconds (the original 11.5 plan), every screen that shows games (Home, My Games, a game's details, Create) fetches the latest list right before it draws itself — the same instant you tap a tab or open a game. This is simpler to reason about, uses less battery and data, and for a class-sized group is just as fresh in practice: you always see accurate numbers when you look at a screen, just not while you're already staring at one and someone else joins in that exact moment. A quiet background timer can be added later without changing anything else if it turns out people want it.
 - **Same person, two devices.** When someone saves a profile with an email that's already registered (say, they used their phone earlier and now use a laptop), the server recognizes the email and reuses that same identity instead of creating a second, duplicate person. If a *different* person later uses that same device with a *different* email, their new profile is kept separate — the device never hands them someone else's saved identity.
 - **No enforcement of "already started" on the server.** The Create screen and Game Details screen already stop you from picking a past time or joining a game that has started, using the time your own device reports. The server does not double-check this, because a phone's clock and a server's clock can disagree by enough (time zones, a wrong clock) to make a server-side check unreliable and more likely to be wrong than helpful. This matches how the rest of the prototype favors the browser's own checks.
-- **Locally tested without Cloudflare's own tools.** This sandbox could not install Cloudflare's `wrangler` command-line tool (its download was blocked), so `src/worker.js` and the database rules in `schema.sql` were tested by running the exact same code in a stand-in copy built from Node.js's own built-in tools — a real SQL database and the same request/response objects a browser uses — and then driving the actual app through a scripted browser (two separate "devices" creating a profile, creating a named game, seeing each other's game, joining, leaving, the creator deleting a game they created, a game deleting itself once its last player leaves, and an admin removing a game) against that copy. 75 automated checks and this full walk-through (27 checks) all passed. The real Cloudflare deployment should still be tested once with a phone or two after it goes live, the same as Task 11.8 already called for.
+- **Locally tested without Cloudflare's own tools.** This sandbox could not install Cloudflare's `wrangler` command-line tool (its download was blocked), so `src/worker.js` and the database rules in `schema.sql` were tested by running the exact same code in a stand-in copy built from Node.js's own built-in tools — a real SQL database and the same request/response objects a browser uses — and then driving the actual app through a scripted browser (two separate "devices" creating a profile, creating a named game, seeing each other's game, joining, leaving, the creator deleting a game they created, a game deleting itself once its last player leaves, opening the founder dashboard before and after real activity, and an admin removing a game) against that copy. 75 automated checks and this full walk-through (35 checks, up from 27) all passed, plus a separate 17-check fixture test of the founder dashboard's math against hand-seeded, known data (see Phase 13.1). The real Cloudflare deployment should still be tested once with a phone or two after it goes live, the same as Task 11.8 already called for.
 - **Admin page is intentionally unlisted.** There is no "Admin" button or tab anywhere in the app. It exists at the web address `#/admin` (for example, `https://your-site.workers.dev/#/admin`), and only works once you set a passcode on the server (see `DEPLOY_ACCOUNTS.md`). Anyone without that passcode who finds the page just sees "That passcode is not right."
 
 ## Git rules for the build
